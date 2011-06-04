@@ -7,11 +7,13 @@ import Hork.Memory
 
 import Data.Bits
 import Data.Word
+import Data.Int
 import Data.List
 import Data.Array.IO
 
 import Control.Monad
 import Control.Monad.State
+import Control.Applicative
 
 
 -- returns just the specified bits, shifted so the least significant unmasked bit is bit 0
@@ -59,6 +61,9 @@ pop = do
 push :: Word16 -> H ()
 push x = modify $ \st -> st { stack = x : stack st }
 
+peek :: H Word16
+peek = head <$> gets stack
+
 
 store :: Addr a => a -> Word16 -> H ()
 store a x = do
@@ -68,6 +73,44 @@ store a x = do
        | var <= 0x0f -> wl (var-1) x
        | otherwise   -> wg (var-0x10) x
 
+
+-- PC management
 setPC :: RawAddr -> H ()
 setPC a = modify $ \st -> st { pc = a }
+
+branch :: RawAddr -> Bool -> H ()
+branch a cond = do
+  b <- rb a
+  let onTrue = testBit b 7
+      short  = testBit b 6
+  rawoffset <- do
+    if short
+      then return . fi $ b .&. 0x3f
+      else do
+        w <- (.&. 0x3fff) <$> rw a
+        return $ if testBit w 13 then w .|. 0xc000 else w
+  let offset = fi (fi (rawoffset :: Word16) :: Int16) :: Int
+      a' = a + if short then 1 else 2
+
+  if onTrue == cond
+    then case offset of
+           0 -> return_ 0
+           1 -> return_ 1
+           _ -> setPC . RA . fi $ fi a' + offset - 2
+    else setPC a'
+
+
+return_ :: Word16 -> H ()
+return_ ret = do
+  rs <- gets returnStack
+  let cs = case rs of
+             [] -> error "Return with empty call stack"
+             (x:_) -> x
+  modify $ \st -> st { stack = csStack cs, locals = csLocals cs, pc = cspc cs, returnStack = tail rs }
+  case csReturn cs of
+    Nothing -> return ()
+    Just v | v == 0x00 -> push ret
+           | v <= 0x10 -> wl (v-1) ret
+           | otherwise -> wg (v-0x10) ret
+
 

@@ -1,12 +1,13 @@
 
 module Hork.Ops where
 
-import Hork.Memory
-import Hork.Types
-import Hork.Strings
-import Hork.Util
 import Hork.Args
 import Hork.Config
+import Hork.Memory
+import Hork.Objects
+import Hork.Strings
+import Hork.Types
+import Hork.Util
 
 import qualified Data.Map as M
 import Data.Word
@@ -73,6 +74,15 @@ ophV p op a as = do
   if p ver then op a as else illegalInstruction
 
 
+ophVarInPlaceI :: (Int16 -> Int16) -> Word8 -> H ()
+ophVarInPlaceI f v 
+  | v == 0x00 = push . fi . f . fi =<< pop
+  | v <= 0x10 = do
+    ls <- gets locals
+    x <- liftIO $ readArray ls (v-1)
+    liftIO $ writeArray ls (v-1) (fi . f . fi $ x)
+  | otherwise = wg (v-0x10) . fi . f . fi =<< rg (v-0x10)
+
 -- implementations
 
 op_add = ophIIS (+)
@@ -92,12 +102,40 @@ op_call_vn = ophCallN
 op_call_vn2 = ophCallN
 op_call_vs2 = ophCallS
 
-
 op_check_arg_count = notImplemented
-op_clear_attr = notImplemented
-op_copy_table = notImplemented
-op_dec = notImplemented
-op_dec_chk = notImplemented
+
+op_clear_attr a as = do
+  let [obj,attr] = map argToWord as
+  objClearAttr obj attr
+  setPC a
+
+
+op_copy_table a [f,s,z] = do
+  let first   = argToWord f
+      second  = argToWord s
+      rawsize = argToInt  z
+      size    = fi $ abs rawsize
+      lockFwd = rawsize < 0
+      backward = not lockFwd && second > first && first+size < second -- whether overlapping
+      indexes = (if backward then reverse else id) [0..size-1]
+  if second == 0
+    then mapM_ (\i -> wb (BA $ first+i) 0) indexes
+    else mapM_ (\i -> rb (BA $ first+i) >>= wb (BA $ first+i)) indexes
+  setPC a
+
+
+op_dec a [Small v] = do
+  ophVarInPlaceI (subtract 1) v
+  setPC a
+
+op_dec_chk a [Small v, x_] = do
+  let x = argToWord x_
+  v' <- case () of
+          () | v == 0x00 -> peek
+             | v <= 0x10 -> rl (v-1)
+             | otherwise -> rg (v-0x10)
+  branch a $ v' < x
+
 op_div = notImplemented
 op_encode_text = notImplemented
 op_erase_line = notImplemented
