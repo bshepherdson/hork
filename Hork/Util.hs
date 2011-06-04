@@ -68,4 +68,6 @@ store a x = do
        | var <= 0x0f -> wl (var-1) x
        | otherwise   -> wg (var-0x10) x
 
+setPC :: RawAddr -> H ()
+setPC a = modify $ \st -> st { pc = a }
 

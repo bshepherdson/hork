@@ -40,7 +40,8 @@ type Locals = IOUArray Word8 Word16
 data CallState = CallState {
     csStack :: [Word16],
     csLocals :: Locals,
-    cspc :: RawAddr
+    cspc :: RawAddr,
+    csReturn :: Maybe Word8
 }
 
 

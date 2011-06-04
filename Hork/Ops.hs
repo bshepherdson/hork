@@ -6,39 +6,93 @@ import Hork.Types
 import Hork.Strings
 import Hork.Util
 import Hork.Args
+import Hork.Config
 
 import qualified Data.Map as M
 import Data.Word
 import Data.Int
 import Data.Bits
+import Data.Array.IO
 
 
 import Control.Monad
+import Control.Monad.State
 import Control.Applicative
+
+
+-- op helpers
+ophWWS :: (Word16 -> Word16 -> Word16) -> Op
+ophWWS f a as = do
+  let [x,y] = map argToWord as
+  store a $ f x y
+  setPC $ a+1
+
+ophIIS :: (Int16 -> Int16 -> Int16) -> Op
+ophIIS f a as = do
+  let [x,y] = map argToInt as
+  store a $ fi $ f x y
+  setPC $ a+1
+
+ophCallS :: Op
+ophCallS a as = do
+  s <- rb a
+  ophCall (Just s) (a+1) as
+
+ophCallN :: Op
+ophCallN = ophCall Nothing
+
+ophCall :: Maybe Word8 -> Op
+ophCall ms callA (routine:args) = do
+  -- build the return stack entry
+  let a = RA . ix . PA . argToWord $ routine
+  st <- get
+  let cs = CallState (stack st) (locals st) a ms
+  version <- configByte "version"
+  nLocals <- rb a
+  newLocals <- liftIO $ newArray (0,nLocals-1) 0
+  when (version < 5) $ do
+    mapM_ (\i -> do
+      x <- rw $ a + 1 + 2* RA (fi i)
+      liftIO $ writeArray newLocals i x
+      ) [0..nLocals-1]
+
+  -- write the arguments over the locals until one or the other runs out
+  let writeArgs = zip [0..nLocals-1] args
+  mapM_ (\(i,x) -> liftIO $ writeArray newLocals i (argToWord x)) writeArgs
+
+  let newPC = if version < 5 then a + 1 + 2 * fi nLocals else a+1
+  put $ st { stack = [], locals = newLocals, pc = newPC, returnStack = cs : returnStack st }
+  -- now we return from this operation and it'll start the routine 
+  setPC $ callA
+
+
+-- check version
+ophV :: (Word8 -> Bool) -> Op -> Op
+ophV p op a as = do
+  ver <- configByte "version"
+  if p ver then op a as else illegalInstruction
 
 
 -- implementations
 
-op_add :: Op
-op_add a as = do
-  let [x,y] = map argToInt as
-  store a $ fi (x+y)
+op_add = ophIIS (+)
+op_and = ophWWS (.&.)
 
-op_and :: Op
-op_and a as = do
-  let [x,y] = map argToWord as
-  store a $ x .&. y
-
+-- TODO: Implement
 op_aread = notImplemented
 op_art_shift = notImplemented
-op_buffer_mode = notImplemented
-op_call = notImplemented
-op_call_1s = notImplemented
-op_call_2n = notImplemented
-op_call_2s = notImplemented
-op_call_vn = notImplemented
-op_call_vn2 = notImplemented
-op_call_vs2 = notImplemented
+op_buffer_mode = doNothing 
+
+op_call = ophCallS
+op_call_1n = ophCallN
+op_call_1s = ophCallS
+op_call_2n = ophCallN
+op_call_2s = ophCallS
+op_call_vn = ophCallN
+op_call_vn2 = ophCallN
+op_call_vs2 = ophCallS
+
+
 op_check_arg_count = notImplemented
 op_clear_attr = notImplemented
 op_copy_table = notImplemented
@@ -125,6 +179,8 @@ op_tokenise = notImplemented
 op_verify = notImplemented
 
 notImplemented = error "Not implemented"
+doNothing _ _ = return ()
+illegalInstruction = error "Illegal instruction"
 
 perform :: Addr a => OperandCount -> Word8 -> [OperandType] -> a -> H ()
 perform count opcode types addr =
