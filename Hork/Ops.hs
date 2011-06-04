@@ -136,13 +136,30 @@ op_dec_chk a [Small v, x_] = do
              | otherwise -> rg (v-0x10)
   branch a $ v' < x
 
-op_div = notImplemented
+op_div = ophIIS div
+
 op_encode_text = notImplemented
 op_erase_line = notImplemented
 op_erase_window = notImplemented
-op_get_child = notImplemented
+
+op_get_child a [n_] = do
+  let n = argToWord n_
+  c <- objGetChild n
+  store a c
+  branch (a+1) $ c /= 0
+
+
 op_get_cursor = notImplemented
-op_get_next_prop = notImplemented
+
+
+op_get_next_prop a [n_, Small prop] = do
+  let n = argToWord n_
+  num <- if prop == 0
+           then objPropTable n >>= propNumber
+           else objPropAddr n prop >>= propNext >>= propNumber
+  store a $ fi num
+
+
 op_get_parent = notImplemented
 op_get_prop = notImplemented
 op_get_prop_addr = notImplemented
