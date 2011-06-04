@@ -12,12 +12,13 @@ import Control.Monad.State
 
 
 -- addresses 
-newtype ByteAddr = BA Word16
-newtype WordAddr = WA Word16
-newtype PackedAddr = PA Word16
+newtype ByteAddr = BA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show)
+newtype WordAddr = WA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show)
+newtype PackedAddr = PA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show)
+newtype RawAddr = RA Word deriving (Eq, Ord, Num, Integral, Real, Enum, Show)
 
-class Addr a where
-  ix :: a -> Int
+class Num a => Addr a where
+  ix :: a -> Word
 
 instance Addr ByteAddr where
   ix (BA a) = fi a
@@ -28,15 +29,18 @@ instance Addr WordAddr where
 instance Addr PackedAddr where
   ix (PA a) = 4 * fi a
 
-type Memory = IOUArray Word Word8
-type Locals = IOUArray Word Word16
+instance Addr RawAddr where
+  ix (RA a) = a
+
+type Memory = IOUArray Word  Word8
+type Locals = IOUArray Word8 Word16
 
 -- monads
 
 data CallState = CallState {
     csStack :: [Word16],
     csLocals :: Locals,
-    cspc :: Word
+    cspc :: RawAddr
 }
 
 
@@ -45,12 +49,21 @@ data HorkState = HorkState {
     stack :: [Word16],
     locals :: Locals,
     returnStack :: [CallState],
-    pc :: Word
+    pc :: RawAddr
 }
 
 
 newtype H a = H (StateT HorkState IO a)
   deriving (Monad, MonadIO, MonadState HorkState, Functor)
+
+
+-- opcode data
+data OperandCount = VAR | OP2 | OP1 | OP0 | EXT
+  deriving (Eq, Ord, Show)
+data OperandType = TLarge | TSmall | TVar | TNone
+  deriving (Eq)
+data Operand = Large Word16 | Small Word8
+
 
 
 -- and some helper functions
