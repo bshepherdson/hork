@@ -407,30 +407,65 @@ op_read a (textbuf_:parsebuf_:_) = do
     ww (parsebuf+i) $ fi (pwAddr w)
     wb (parsebuf+i+2) (pwLen w)
     wb (parsebuf+i+3) (pwPos w)
+  
+  v <- version
+  when (v >= 5) $ store a 10
+  setPC $ if v >= 5 then a+1 else a
 
 
-op_read_char = notImplemented
-op_remove_obj = notImplemented
-op_restart = notImplemented
+op_read_char a as = do
+  c <- liftIO getChar
+  store a . fi $ a2z c
+  setPC $ a+1
+
+
+op_remove_obj a [n_] = do
+  let n = argToWord n_
+  objRemoveFromParent n
+  setPC a
+
+op_restart = op_quit -- TODO: Implement properly once the real flow of the thing is stable
 op_restore = notImplemented
 op_restore_undo = notImplemented
-op_ret = notImplemented
-op_ret_popped = notImplemented
-op_rfalse = notImplemented
-op_rtrue = notImplemented
+
+op_ret a [v_] = return_ $ argToWord v_
+op_ret_popped _ _ = pop >>= return_
+op_rfalse     _ _ = return_ 0
+op_rtrue      _ _ = return_ 1
+
 op_save = notImplemented
 op_save_undo = notImplemented
-op_scan_table = notImplemented
-op_set_attr = notImplemented
+
+
+-- TODO: Handle the form argument for version 5
+op_scan_table a as = do
+  let [x, table_, len] = map argToWord $ take 3 as
+  let table = BA table_
+
+  vals <- mapM rw $ map ((table+) . (2*)) [0..fi len-1]
+  let index = map fst . take 1 . filter ((==x).snd) . zip [0..] $ vals
+  case index of
+    []  -> store a 0 >> branch (a+1) False
+    [i] -> store a i >> branch (a+1) True
+  
+
+op_set_attr a as = do
+  let [n, attr] = map argToWord as
+  objSetAttr n attr
+  setPC a
+  
 op_set_colour = notImplemented
 op_set_cursor = notImplemented
 op_set_font = notImplemented
 op_set_text_style = notImplemented
 op_set_window = notImplemented
+
 op_show_status = notImplemented
 op_sound_effect = notImplemented
 op_split_window = notImplemented
-op_sread = notImplemented
+
+op_sread = op_read
+
 op_store = notImplemented
 op_storeb = notImplemented
 op_storew = notImplemented
