@@ -466,15 +466,43 @@ op_split_window = notImplemented
 
 op_sread = op_read
 
-op_store = notImplemented
-op_storeb = notImplemented
-op_storew = notImplemented
-op_sub = notImplemented
-op_test = notImplemented
-op_test_attr = notImplemented
+op_store a [var_,val_] = do
+  let var = argToByte var_
+      val = argToWord val_
+  case () of
+    () | var == 0x00 -> push val
+       | var <= 0x10 -> wl (var-1) val
+       | otherwise   -> wg (var-0x10) val
+  setPC a
+
+op_storeb a [array_, index_, val_] = do
+  let [array, index] = map (BA . argToWord) [array_,index_]
+  let val = argToByte val_
+  wb (array+index) val
+  setPC a
+
+op_storew a as = do
+  let [array, index, val] = map (BA . argToWord) as
+  ww (array+index) (fi val)
+  setPC a
+
+op_sub = ophIIS (flip subtract)
+
+op_test a as = do
+  let [mask, flags] = map argToWord as
+  branch a $ mask .&. flags == flags
+
+op_test_attr a as = do
+  let [n, attr] = map argToWord as
+  r <- objTestAttr n attr
+  branch a r
+
 op_throw = notImplemented
 op_tokenise = notImplemented
-op_verify = notImplemented
+
+-- TODO: implement properly. For now it unconditionally branches.
+op_verify a _ = branch a True
+
 
 notImplemented = error "Not implemented"
 doNothing _ _ = return ()

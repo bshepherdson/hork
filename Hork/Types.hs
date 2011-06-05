@@ -61,6 +61,8 @@ data HorkState = HorkState {
 newtype H a = H (StateT HorkState IO a)
   deriving (Monad, MonadIO, MonadState HorkState, Functor)
 
+runH (H a) s = runStateT a s
+
 
 -- opcode data
 data OperandCount = VAR | OP2 | OP1 | OP0 | EXT

@@ -9,12 +9,56 @@ import Hork.Ops
 
 import Control.Monad
 import Control.Monad.State
+
 import System.IO
+import System.Environment
 
 import Data.List
 import Data.Bits
 import Data.Word
+import Data.Array.IO
 
+import qualified Data.ByteString as B
+
+
+cmdLineArgs :: IO String
+cmdLineArgs = do
+  args <- getArgs
+  case args of
+    [x] -> return x
+    _   -> error "Usage: hork <story file>"
+
+-- getting started
+main :: IO ()
+main = do
+  storyFile <- cmdLineArgs
+  story <- load storyFile
+  state <- initialize story
+  _ <- runH interpLoop state
+  return ()
+
+  
+
+-- returns the whole file contents
+load :: String -> IO B.ByteString
+load = B.readFile
+
+-- takes the contents of the story file, builds a HorkState
+initialize :: B.ByteString -> IO HorkState
+initialize story = do
+  let v = B.head story
+  mem <- newListArray (0, fi (B.length story) - 1) (B.unpack story)
+  ls <- newArray (0,15) 0
+  pc1 <- readArray mem 6
+  pc2 <- readArray mem 7
+  let initPC = shiftL (fi pc1 :: Word16) 8 .|. (fi pc2 :: Word16) 
+  return HorkState { memory = mem, stack = [], locals = ls, returnStack = [], pc = RA (fi initPC), dictionary = Nothing }
+
+
+-- interpreter internals
+
+interpLoop :: H ()
+interpLoop = forever interp
 
 
 -- main interpreter function
