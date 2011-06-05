@@ -8,6 +8,9 @@ import Data.Word
 import qualified Data.Map as M
 
 
+version :: H Word8
+version = configByte "version"
+
 configByte :: String -> H Word8
 configByte = getField rb
 

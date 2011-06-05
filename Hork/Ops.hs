@@ -3,6 +3,7 @@ module Hork.Ops where
 
 import Hork.Args
 import Hork.Config
+import Hork.Dict
 import Hork.Memory
 import Hork.Objects
 import Hork.Strings
@@ -14,12 +15,17 @@ import Data.Word
 import Data.Int
 import Data.Bits
 import Data.Array.IO
+import Data.Char
+import Data.List
 
 
 import Control.Monad
 import Control.Monad.State
 import Control.Applicative
 
+import System.Random
+import System.Exit
+import System.IO
 
 -- op helpers
 ophWWS :: (Word16 -> Word16 -> Word16) -> Op
@@ -291,21 +297,118 @@ op_piracy a _ = branch a True
 
 op_pop a _ = pop >> setPC a
 
-op_print = notImplemented
-op_print_addr = notImplemented
-op_print_char = notImplemented
-op_print_num = notImplemented
-op_print_obj = notImplemented
-op_print_paddr = notImplemented
-op_print_ret = notImplemented
+op_print a [] = do
+  str <- fromZSCII a
+  len <- strLenBytes a
+  output str
+  setPC $ a + fi len
+
+op_print_addr a [addr_] = do
+  let addr = BA $ argToWord addr_
+  str <- fromZSCII addr
+  output str
+  setPC a
+
+
+op_print_char a [c_] = do
+  let c = argToByte c_
+  let char = z2a c
+  output [char]
+  setPC a
+
+op_print_num a [v_] = do
+  let v = argToInt v_
+  output (show v)
+  setPC a
+
+op_print_obj a [n_] = do
+  let n = argToWord n_
+  when (n == 0) $ error "Attempt to print object 0"
+  addr <- objShortName n
+  str <- fromZSCII addr
+  output str
+  setPC a
+
+op_print_paddr a [pa_] = do
+  let pa = PA $ argToWord pa_
+  str <- fromZSCII pa
+  output str
+  setPC a
+
+op_print_ret a [] = do
+  str <- fromZSCII a
+  output $ str ++ "\n"
+  return_ 1
+
 op_print_table = notImplemented
 
 
-op_pull = notImplemented
-op_push = notImplemented
-op_put_prop = notImplemented
-op_quit = notImplemented
-op_random = notImplemented
+op_pull a [] = do
+  x <- pop
+  store a x
+  setPC $ a+1
+
+op_push a [x_] = do
+  let x = argToWord x_
+  push x
+  setPC a
+
+op_put_prop a [n_,p_,x_] = do
+  let [n,x] = map argToWord [n_,x_]
+      p     = argToByte p_
+  prop <- objPropAddr n p
+  size <- propSize prop
+  d <- propData prop
+  case size of
+    1 -> wb d (fi x :: Word8)
+    2 -> ww d x
+    _ -> error $ "put_prop called for property of length " ++ show size
+  setPC a
+
+
+op_quit a [] = liftIO exitSuccess
+
+op_random a [r_] = do
+  let r = argToInt r_
+  v <- case () of
+    () | r == 0 -> liftIO $ do -- reseed to be arbitrary again. uses the next random value.
+         n <- randomIO
+         setStdGen $ mkStdGen n
+         return 0
+       | r < 0 -> liftIO $ do -- reseed to the given value, leaving it negative
+         setStdGen $ mkStdGen (fi r)
+         return 0
+       | otherwise -> liftIO $ fmap fi $ randomRIO (1,fi r::Int)
+  store a $ fi v
+  setPC $ a+1
+
+
+op_read a (textbuf_:parsebuf_:_) = do
+  let [textbuf,parsebuf] = map (BA . argToWord) [textbuf_,parsebuf_]
+
+  -- TODO: versions 1-3 require status line to be re-output here.
+  -- TODO: handle v5 special stuff. terminators, storing the terminator, nonempty buffer
+
+  -- steps: read to \n. copy into textbuf. split into words. search dictionary. write into parsebuf
+  -- reading input
+  rawInput <- liftIO getLine
+  maxlen <- rb textbuf
+  let input = (++[0]) . map (a2z . toLower) $ genericTake maxlen rawInput
+  -- writing into the buffer
+  forM_ (zip ([0..]::[RawAddr]) input) (uncurry wb)
+  -- splitting and searching
+  rawParsed <- parse input
+  -- and finally write into parsebuf
+  parseBufLen <- rb parsebuf
+  let parsed = genericTake parseBufLen rawParsed -- truncate any extra words
+  -- write the number of parsed words
+  wb (parsebuf+1) $ genericLength parsed
+  forM_ (zip parsed [2,6..]) $ \(w,i) -> do
+    ww (parsebuf+i) $ fi (pwAddr w)
+    wb (parsebuf+i+2) (pwLen w)
+    wb (parsebuf+i+3) (pwPos w)
+
+
 op_read_char = notImplemented
 op_remove_obj = notImplemented
 op_restart = notImplemented

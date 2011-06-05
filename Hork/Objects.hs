@@ -15,9 +15,6 @@ import Data.Word
 
 type ObjNum = Word16
 
-version :: H Word8
-version = configByte "version"
-
 getObj :: ObjNum -> H RawAddr
 getObj n = do
   t <- RA . fi <$> configWord "objects" -- byte address
@@ -113,6 +110,15 @@ objAddChild parent child = do
   objSetChild parent child
   objSetParent child parent
   
+
+
+-- returns the address of the beginning of the string, skipping the length byte
+objShortName :: ObjNum -> H RawAddr
+objShortName n = do
+  obj <- getObj n
+  v <- version
+  let offset = if v <= 3 then 7 else 12
+  (+1) . RA . fi <$> rw (obj + offset)
 
 -- properties
 

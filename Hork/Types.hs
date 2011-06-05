@@ -8,6 +8,8 @@ import Data.Array.IO
 import Data.Word
 import Data.Bits
 
+import qualified Data.Map as M
+
 import Control.Monad
 import Control.Monad.State
 
@@ -51,7 +53,8 @@ data HorkState = HorkState {
     stack :: [Word16],
     locals :: Locals,
     returnStack :: [CallState],
-    pc :: RawAddr
+    pc :: RawAddr,
+    dictionary :: Maybe Dictionary
 }
 
 
@@ -67,6 +70,7 @@ data OperandType = TLarge | TSmall | TVar | TNone
 data Operand = Large Word16 | Small Word8
 
 
+type Dictionary = M.Map [Word16] ByteAddr
 
 -- and some helper functions
 fi :: forall a b . (Integral a, Num b) => a -> b
