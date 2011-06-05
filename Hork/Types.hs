@@ -6,18 +6,19 @@ import Data.List
 import Data.Array.IO
 
 import Data.Word
+import Data.Bits
 
 import Control.Monad
 import Control.Monad.State
 
 
 -- addresses 
-newtype ByteAddr = BA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show)
-newtype WordAddr = WA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show)
-newtype PackedAddr = PA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show)
-newtype RawAddr = RA Word deriving (Eq, Ord, Num, Integral, Real, Enum, Show)
+newtype ByteAddr = BA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show, Bits)
+newtype WordAddr = WA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show, Bits)
+newtype PackedAddr = PA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show, Bits)
+newtype RawAddr = RA Word deriving (Eq, Ord, Num, Integral, Real, Enum, Show, Bits)
 
-class Num a => Addr a where
+class (Num a, Bits a) => Addr a where
   ix :: a -> Word
 
 instance Addr ByteAddr where

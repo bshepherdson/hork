@@ -83,6 +83,24 @@ ophVarInPlaceI f v
     liftIO $ writeArray ls (v-1) (fi . f . fi $ x)
   | otherwise = wg (v-0x10) . fi . f . fi =<< rg (v-0x10)
 
+-- used by the prop handlers. expects storage, no branch.
+ophProp :: (RawAddr -> H Word16) -> Op
+ophProp f a [n_, p_] = do
+  let n = argToWord n_
+      p = argToByte p_
+  prop <- objPropAddr n p
+  res <- f prop
+  store a res
+  setPC $ a+1
+
+
+ophBinJump :: (Int16 -> Int16 -> H Bool) -> Op
+ophBinJump p a as = do
+  let [x,y] = map argToInt as
+  cond <- p x y
+  branch a cond
+
+
 -- implementations
 
 op_add = ophIIS (+)
@@ -129,12 +147,13 @@ op_dec a [Small v] = do
   setPC a
 
 op_dec_chk a [Small v, x_] = do
-  let x = argToWord x_
+  ophVarInPlaceI (subtract 1) v
+  let x = argToInt x_
   v' <- case () of
           () | v == 0x00 -> peek
              | v <= 0x10 -> rl (v-1)
              | otherwise -> rg (v-0x10)
-  branch a $ v' < x
+  branch a $ fi v' < x
 
 op_div = ophIIS div
 
@@ -160,34 +179,118 @@ op_get_next_prop a [n_, Small prop] = do
   store a $ fi num
 
 
-op_get_parent = notImplemented
-op_get_prop = notImplemented
-op_get_prop_addr = notImplemented
-op_get_prop_len = notImplemented
-op_get_sibling = notImplemented
-op_inc = notImplemented
-op_inc_chk = notImplemented
+op_get_parent a [n_] = do
+  let n = argToWord n_
+  c <- objGetParent n
+  store a c
+  setPC $ a+1
+
+
+op_get_prop = ophProp $ \prop -> do
+  size <- propSize prop
+  d <- propData prop
+  case size of
+    1 -> fi <$> rb d
+    2 -> rw d
+    _ -> error "get_prop called on property with length neither 1 nor 2."
+
+op_get_prop_addr = ophProp (\p -> propData p >>= return . fi)
+
+op_get_prop_len = ophProp (\p -> propSize p >>= return . fi)
+
+op_get_sibling a [n_] = do
+  let n = argToWord n_
+  c <- objGetParent n
+  store a c
+  branch (a+1) $ c /= 0
+
+op_inc a [Small v] = do
+  ophVarInPlaceI (+1) v
+  setPC a
+
+op_inc_chk a [Small v, x_] = do
+  ophVarInPlaceI (+1) v
+  let x = argToInt x_
+  v' <- case () of
+          () | v == 0x00 -> peek
+             | v <= 0x10 -> rl (v-1)
+             | otherwise -> rg (v-0x10)
+  branch a $ fi v' > x
+
+
 op_input_stream = notImplemented
-op_insert_obj = notImplemented
-op_je = notImplemented
-op_jg = notImplemented
-op_jin = notImplemented
-op_jl = notImplemented
-op_jump = notImplemented
-op_jz = notImplemented
-op_load = notImplemented
-op_loadb = notImplemented
-op_loadw = notImplemented
+
+
+op_insert_obj a as = do
+  let [obj,dest] = map argToWord as
+  objRemoveFromParent obj
+  objAddChild dest obj
+  setPC a
+
+
+op_je = ophBinJump $ \a b -> return (a == b)
+op_jg = ophBinJump $ \a b -> return (a >  b)
+op_jin = ophBinJump $ \a b -> do
+  p <- objGetParent (fi a)
+  return (p == fi b)
+op_jl = ophBinJump $ \a b -> return (a < b)
+
+
+op_jump a [offset_] = do
+  let offset = argToInt offset_
+  setPC . RA . fi $ fi a + offset
+
+op_jz a [x_] = do
+  let x = argToWord x_
+  branch a $ x == 0
+
+
+op_load a [v_] = do
+  let v = argToByte v_
+  val <- case () of
+           () | v == 0x00 -> pop
+              | v <= 0x10 -> rl (v-1)
+              | otherwise -> rg (v-0x10)
+  store a val
+  setPC $ a+1
+  
+op_loadb a as = do
+  let [arr, index] = map argToWord as
+  b <- rb . BA $ arr+index
+  store a (fi b)
+  setPC $ a+1
+  
+op_loadw a as = do
+  let [arr, index] = map argToWord as
+  w <- rw . BA $ arr + 2*index
+  store a w
+  setPC $ a+1
+
+
 op_log_shift = notImplemented
-op_mod = notImplemented
-op_mul = notImplemented
+
+
+op_mod = ophIIS mod
+op_mul = ophIIS (*)
+
 op_new_line = notImplemented
-op_nop = notImplemented
-op_not = notImplemented
-op_or = notImplemented
+
+op_nop a _ = setPC a
+
+op_not a [x_] = do
+  let x = argToWord x_
+  store a $ complement x
+  setPC $ a+1
+
+op_or = ophWWS (.|.)
+
 op_output_stream = notImplemented
-op_piracy = notImplemented
-op_pop = notImplemented
+
+-- unconditionally branch, gullibly assuming genuine games
+op_piracy a _ = branch a True
+
+op_pop a _ = pop >> setPC a
+
 op_print = notImplemented
 op_print_addr = notImplemented
 op_print_char = notImplemented
@@ -196,6 +299,8 @@ op_print_obj = notImplemented
 op_print_paddr = notImplemented
 op_print_ret = notImplemented
 op_print_table = notImplemented
+
+
 op_pull = notImplemented
 op_push = notImplemented
 op_put_prop = notImplemented

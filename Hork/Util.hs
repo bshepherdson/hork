@@ -114,3 +114,13 @@ return_ ret = do
            | otherwise -> wg (v-0x10) ret
 
 
+
+-- general monadic helper functions
+linkedListUntil :: Monad m => (a -> m Bool) -> (a -> m a) -> a -> m a
+linkedListUntil p next x = do
+  cond <- p x
+  if cond
+    then return x
+    else next x >>= linkedListUntil p next
+
+

@@ -72,6 +72,47 @@ objGetSibling = objGetNeighbour (5, 8)
 objGetChild   = objGetNeighbour (6,10)
 
 
+-- these are intended to be called internally in Hork.Objects
+objSetNeighbour :: (RawAddr, RawAddr) -> ObjNum -> ObjNum -> H ()
+objSetNeighbour (old,new) n to = do
+  obj <- getObj n
+  v <- version
+  if v <= 3
+    then wb (obj+old) (fi to)
+    else ww (obj+new) to
+
+objSetParent,objSetSibling,objSetChild :: ObjNum -> ObjNum -> H ()
+objSetParent  = objSetNeighbour (4, 6)
+objSetSibling = objSetNeighbour (5, 8)
+objSetChild   = objSetNeighbour (6,10)
+
+
+-- these are the public tree manipulation functions
+
+-- removes the given object from its parent, shifting the children as necessary
+objRemoveFromParent :: ObjNum -> H ()
+objRemoveFromParent n = do
+  parent <- objGetParent n
+  when (parent /= 0) $ do
+    firstChild <- objGetChild parent
+    sibling <- objGetSibling n
+    if firstChild == n
+      then do
+        objSetChild parent sibling
+        objSetSibling n 0
+      else do
+        prevChild <- linkedListUntil (\s -> objGetSibling s >>= \n2 -> return (n==n2)) objGetSibling firstChild
+        objSetSibling prevChild sibling
+    objSetParent n 0
+
+
+objAddChild :: ObjNum -> ObjNum -> H ()
+objAddChild parent child = do
+  oldChild <- objGetChild parent
+  objSetSibling child oldChild
+  objSetChild parent child
+  objSetParent child parent
+  
 
 -- properties
 
@@ -125,6 +166,16 @@ propSize p = do
           s <- (.&. 0x3f) <$> rb (p+1)
           return $ if s == 0 then 64 else s
         else return $ if testBit b 6 then 2 else 1
+
+
+-- returns the address of the data portion of this property
+propData :: RawAddr -> H RawAddr
+propData p = do
+  v <- version
+  if v <= 3 || not (testBit p 7)
+    then return $ p+1
+    else return $ p+2
+
 
 -- returns the address of the next property after the given one
 propNext :: RawAddr -> H RawAddr

@@ -41,6 +41,10 @@ argToInt :: Operand -> Int16
 argToInt (Large x) = fi x
 argToInt (Small x) = fi (fi x :: Word16)
 
+argToByte :: Operand -> Word8
+argToByte (Small x) = x
+argToByte (Large x) = fi x -- truncates. not my problem.
+
 
 getArgList :: Addr a => a -> [OperandType] -> H (RawAddr, [Operand])
 getArgList a ts = return . (,) a' =<< sequence actions
