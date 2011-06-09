@@ -106,6 +106,7 @@ return_ ret = do
   let cs = case rs of
              [] -> error "Return with empty call stack"
              (x:_) -> x
+  debug $ show cs
   modify $ \st -> st { stack = csStack cs, locals = csLocals cs, pc = cspc cs, returnStack = tail rs }
   case csReturn cs of
     Nothing -> return ()
@@ -123,4 +124,8 @@ linkedListUntil p next x = do
     then return x
     else next x >>= linkedListUntil p next
 
+
+debug :: String -> H ()
+debug = liftIO . putStrLn
+--debug _ = return ()
 

@@ -3,6 +3,7 @@
 module Hork.Types where
 
 import Data.List
+import Data.Array
 import Data.Array.IO
 
 import Data.Word
@@ -13,12 +14,22 @@ import qualified Data.Map as M
 import Control.Monad
 import Control.Monad.State
 
+import Numeric (showHex)
 
--- addresses 
+import System.IO.Unsafe
+
+
+-- addresses
 newtype ByteAddr = BA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show, Bits)
 newtype WordAddr = WA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show, Bits)
-newtype PackedAddr = PA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show, Bits)
+--newtype PackedAddr = PA Word16 deriving (Eq, Ord, Num, Integral, Real, Enum, Show, Bits)
 newtype RawAddr = RA Word deriving (Eq, Ord, Num, Integral, Real, Enum, Show, Bits)
+
+-- given the version and a packed address, returns a RawAddr pointing to the same location.
+pa :: Word8 -> Word16 -> RawAddr
+pa v a | v <= 3 = RA $ 2 * fi a
+       | v <= 5 = RA $ 4 * fi a
+       | otherwise = error $ "Unsupported version: " ++ show v
 
 class (Num a, Bits a) => Addr a where
   ix :: a -> Word
@@ -28,9 +39,6 @@ instance Addr ByteAddr where
 
 instance Addr WordAddr where
   ix (WA a) = 2 * fi a
-
-instance Addr PackedAddr where
-  ix (PA a) = 4 * fi a
 
 instance Addr RawAddr where
   ix (RA a) = a
@@ -46,6 +54,12 @@ data CallState = CallState {
     cspc :: RawAddr,
     csReturn :: Maybe Word8
 }
+
+instance Show CallState where
+  show (CallState st ls (RA pc) ret) = "  stack: [" ++ intercalate ", " (map (flip showHex []) st) ++ "]\n"
+                                    ++ "  locals: [" ++ intercalate ", " (map (flip showHex []) (unsafePerformIO $ getElems ls)) ++ "]\n"
+                                    ++ "  pc: " ++ showHex pc [] ++ "\n"
+                                    ++ "  return: " ++ show (fmap (flip showHex []) ret)
 
 
 data HorkState = HorkState {

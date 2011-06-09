@@ -13,6 +13,8 @@ import Data.List
 import Data.Word
 import Data.Int
 
+import Numeric (showHex)
+
 
 getArg :: Addr a => a -> OperandType -> H Operand
 getArg a TNone = error "Can't happen: getArg called for TNone"
@@ -52,5 +54,8 @@ getArgList a ts = return . (,) a' =<< sequence actions
 
 
 showArgs :: (RawAddr, [Operand]) -> String
-showArgs (a, as) = showHex a [] ++ " [" 
+showArgs (a, as) = showHex a [] ++ " [" ++ intercalate "," (map showArg as) ++ "]"
+  where showArg (Large x) = pad 4 x
+        showArg (Small x) = pad 2 x
+        pad n x = reverse . take n . (++ repeat '0') . reverse $ showHex x []
 

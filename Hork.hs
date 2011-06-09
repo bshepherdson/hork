@@ -80,14 +80,14 @@ interpShort i b = do
   let typ = opType $ bits b [4,5]
       count = case typ of TNone -> OP0; _ -> OP1
       opcode = bits b [0..3]
-  perform count opcode [typ] (i+1)
+  perform i count opcode [typ] (i+1)
 
 
 interpLong :: Addr a => a -> Word8 -> H ()
 interpLong i b = do
   let types = [if testBit b 6 then TVar else TSmall, if testBit b 5 then TVar else TSmall]
       opcode = bits b [0..4]
-  perform OP2 opcode types (i+1)
+  perform i OP2 opcode types (i+1)
 
 
 interpVariable :: Addr a => a -> Word8 -> H ()
@@ -102,14 +102,14 @@ interpVariable i b = do
                    else do
                      t <- typeByte (i+1)
                      return (t, i+2)
-  perform VAR opcode (filter (/= TNone) types) i'
+  perform i VAR opcode (filter (/= TNone) types) i'
 
 
 interpExtended :: Addr a => a -> Word8 -> H ()
 interpExtended i b = do
   opcode <- rb (i+1)
   t <- typeByte (i+2)
-  perform EXT opcode (filter (/= TNone) t) (i+3)
+  perform i EXT opcode (filter (/= TNone) t) (i+3)
 
 
 -- takes just the two bits

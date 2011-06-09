@@ -53,27 +53,30 @@ ophCallN = ophCall Nothing
 ophCall :: Maybe Word8 -> Op
 ophCall ms callA (routine:args) = do
   -- build the return stack entry
-  let a = RA . ix . PA . argToWord $ routine
+  v <- version
+  let a = RA . ix . pa v . argToWord $ routine
+  debug $ "Calling routine at " ++ showHex a []
   st <- get
-  let cs = CallState (stack st) (locals st) a ms
-  version <- configByte "version"
+  let cs = CallState (stack st) (locals st) callA ms
   nLocals <- rb a
+  debug $ "Routine has " ++ show nLocals ++ " locals."
   newLocals <- liftIO $ newArray (0,nLocals-1) 0
-  when (version < 5) $ do
+  when (v < 5) $ do
     mapM_ (\i -> do
       x <- rw $ a + 1 + 2* RA (fi i)
       liftIO $ writeArray newLocals i x
+      debug $ "Storing local " ++ show i ++ " as " ++ showHex x []
       ) [0..nLocals-1]
 
   -- write the arguments over the locals until one or the other runs out
   let writeArgs = zip [0..nLocals-1] args
   mapM_ (\(i,x) -> liftIO $ writeArray newLocals i (argToWord x)) writeArgs
+  debug $ "Storing arguments on top of locals."
 
-  let newPC = if version < 5 then a + 1 + 2 * fi nLocals else a+1
+  let newPC = if v < 5 then a + 1 + 2 * fi nLocals else a+1
+  debug $ "Beginning execution at " ++ showHex newPC []
   put $ st { stack = [], locals = newLocals, pc = newPC, returnStack = cs : returnStack st }
-  -- now we return from this operation and it'll start the routine 
-  setPC $ callA
-
+  -- now we return from this operation and it'll start the routine
 
 -- check version
 ophV :: (Word8 -> Bool) -> Op -> Op
@@ -332,8 +335,9 @@ op_print_obj a [n_] = do
   setPC a
 
 op_print_paddr a [pa_] = do
-  let pa = PA $ argToWord pa_
-  str <- fromZSCII pa
+  v <- version
+  let addr = pa v $ argToWord pa_
+  str <- fromZSCII addr
   output str
   setPC a
 
@@ -510,13 +514,13 @@ notImplemented = error "Not implemented"
 doNothing _ _ = return ()
 illegalInstruction = error "Illegal instruction"
 
-perform :: Addr a => OperandCount -> Word8 -> [OperandType] -> a -> H ()
-perform count opcode types addr =
+perform :: Addr a => a -> OperandCount -> Word8 -> [OperandType] -> a -> H ()
+perform i count opcode types addr =
   case M.lookup (Opcode count opcode) opcodeMap of
     Nothing -> error $ "Illegal instruction: " ++ show (Opcode count opcode)
     Just (name, op) -> do
       args <- getArgList addr types
-      liftIO $ hPutStrLn stderr $ showHex (ix addr) [] ++ ": " ++ name ++ " " ++ show args
+      liftIO $ hPutStrLn stderr $ showHex (ix i) [] ++ ": " ++ name ++ " " ++ showArgs args
       uncurry op args
 
 
