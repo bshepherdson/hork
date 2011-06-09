@@ -118,8 +118,8 @@ op_add = ophIIS (+)
 op_and = ophWWS (.&.)
 
 -- TODO: Implement
-op_aread = notImplemented
-op_art_shift = notImplemented
+op_aread = notImplemented "op_aread"
+op_art_shift = notImplemented "op_art_shift"
 op_buffer_mode = doNothing 
 
 op_call = ophCallS
@@ -131,7 +131,7 @@ op_call_vn = ophCallN
 op_call_vn2 = ophCallN
 op_call_vs2 = ophCallS
 
-op_check_arg_count = notImplemented
+op_check_arg_count = notImplemented "op_check_arg_count"
 
 op_clear_attr a as = do
   let [obj,attr] = map argToWord as
@@ -168,9 +168,9 @@ op_dec_chk a [Small v, x_] = do
 
 op_div = ophIIS div
 
-op_encode_text = notImplemented
-op_erase_line = notImplemented
-op_erase_window = notImplemented
+op_encode_text = notImplemented "op_encode_text"
+op_erase_line = notImplemented "op_erase_line"
+op_erase_window = notImplemented "op_erase_window"
 
 op_get_child a [n_] = do
   let n = argToWord n_
@@ -179,7 +179,7 @@ op_get_child a [n_] = do
   branch (a+1) $ c /= 0
 
 
-op_get_cursor = notImplemented
+op_get_cursor = notImplemented "op_get_cursor"
 
 
 op_get_next_prop a [n_, Small prop] = do
@@ -229,7 +229,7 @@ op_inc_chk a [Small v, x_] = do
   branch a $ fi v' > x
 
 
-op_input_stream = notImplemented
+op_input_stream = notImplemented "op_input_stream"
 
 
 op_insert_obj a as = do
@@ -278,13 +278,13 @@ op_loadw a as = do
   setPC $ a+1
 
 
-op_log_shift = notImplemented
+op_log_shift = notImplemented "op_log_shift"
 
 
 op_mod = ophIIS mod
 op_mul = ophIIS (*)
 
-op_new_line = notImplemented
+op_new_line a [] = output "\n" >> setPC a
 
 op_nop a _ = setPC a
 
@@ -295,7 +295,7 @@ op_not a [x_] = do
 
 op_or = ophWWS (.|.)
 
-op_output_stream = notImplemented
+op_output_stream = notImplemented "op_output_stream"
 
 -- unconditionally branch, gullibly assuming genuine games
 op_piracy a _ = branch a True
@@ -346,7 +346,7 @@ op_print_ret a [] = do
   output $ str ++ "\n"
   return_ 1
 
-op_print_table = notImplemented
+op_print_table = notImplemented "op_print_table"
 
 
 op_pull a [] = do
@@ -431,16 +431,16 @@ op_remove_obj a [n_] = do
   setPC a
 
 op_restart = op_quit -- TODO: Implement properly once the real flow of the thing is stable
-op_restore = notImplemented
-op_restore_undo = notImplemented
+op_restore = notImplemented "op_restore"
+op_restore_undo = notImplemented "op_restore_undo"
 
 op_ret a [v_] = return_ $ argToWord v_
 op_ret_popped _ _ = pop >>= return_
 op_rfalse     _ _ = return_ 0
 op_rtrue      _ _ = return_ 1
 
-op_save = notImplemented
-op_save_undo = notImplemented
+op_save = notImplemented "op_save"
+op_save_undo = notImplemented "op_save_undo"
 
 
 -- TODO: Handle the form argument for version 5
@@ -460,15 +460,15 @@ op_set_attr a as = do
   objSetAttr n attr
   setPC a
   
-op_set_colour = notImplemented
-op_set_cursor = notImplemented
-op_set_font = notImplemented
-op_set_text_style = notImplemented
-op_set_window = notImplemented
+op_set_colour = notImplemented "op_set_colour"
+op_set_cursor = notImplemented "op_set_cursor"
+op_set_font = notImplemented "op_set_font"
+op_set_text_style = notImplemented "op_set_text_style"
+op_set_window = notImplemented "op_set_window"
 
-op_show_status = notImplemented
-op_sound_effect = notImplemented
-op_split_window = notImplemented
+op_show_status = notImplemented "op_show_status"
+op_sound_effect = notImplemented "op_sound_effect"
+op_split_window = notImplemented "op_split_window"
 
 op_sread = op_read
 
@@ -503,14 +503,14 @@ op_test_attr a as = do
   r <- objTestAttr n attr
   branch a r
 
-op_throw = notImplemented
-op_tokenise = notImplemented
+op_throw = notImplemented "op_throw"
+op_tokenise = notImplemented "op_tokenise"
 
 -- TODO: implement properly. For now it unconditionally branches.
 op_verify a _ = branch a True
 
 
-notImplemented = error "Not implemented"
+notImplemented s = error $ "Not implemented: " ++ s
 doNothing _ _ = return ()
 illegalInstruction = error "Illegal instruction"
 
