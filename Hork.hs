@@ -102,7 +102,7 @@ interpVariable i b = do
                    else do
                      t <- typeByte (i+1)
                      return (t, i+2)
-  perform i VAR opcode (filter (/= TNone) types) i'
+  perform i count opcode (filter (/= TNone) types) i'
 
 
 interpExtended :: Addr a => a -> Word8 -> H ()
