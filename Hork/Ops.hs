@@ -249,7 +249,7 @@ op_jl = ophBinJump $ \a b -> return (a < b)
 
 op_jump a [offset_] = do
   let offset = argToInt offset_
-  setPC . RA . fi $ fi a + offset
+  setPC . RA . fi $ fi a + offset - 2 -- minus 2 bytes for the jump instruction itself.
 
 op_jz a [x_] = do
   let x = argToWord x_
@@ -519,7 +519,9 @@ perform i count opcode types addr =
   case M.lookup (Opcode count opcode) opcodeMap of
     Nothing -> error $ "Illegal instruction: " ++ show (Opcode count opcode)
     Just (name, op) -> do
-      args <- getArgList addr types
+      args <- case filter (/=TNone) types of
+                [] -> return (RA $ ix addr, []) -- gracefully handle 0OP and var-with-none-provided args
+                _  -> getArgList addr types
       liftIO $ hPutStrLn stderr $ showHex (ix i) [] ++ ": " ++ name ++ " " ++ showArgs args
       uncurry op args
 
