@@ -19,6 +19,8 @@ import Control.Monad
 import Control.Applicative
 import Control.Monad.Trans
 
+import Numeric (showHex)
+
 import System.IO
 
 
@@ -32,8 +34,9 @@ output = liftIO . putStr
 -- note that the returned values are NOT ZSCII values, but are the literal values from the encoded string
 unpack :: Addr a => a -> H [Word8]
 unpack a = do
+  --debug $ "Unpacking at " ++ showHex (ix a) []
   c <- rw a
-  rest <- if testBit a 15
+  rest <- if testBit c 15
             then return []
             else unpack $ a+2 -- recurse
   let x = bits c [10..14]
@@ -61,9 +64,13 @@ unpackedToZSCII cs = go cs 0 Nothing -- chars, alphabet, Maybe abbreviation set 
         go (c:cs) _ (Just a) = do
           table <- BA <$> configWord "abbreviations"
           let index = 32*(a-1) + c
-          strAddr <- WA <$> rw (table + 2 * fi index)
+          let entry = table + 2 * BA (fi index)
+          strAddr_ <- WA <$> rw entry --(table + 2 * BA (fi index))
+          let strAddr = RA $ ix strAddr_ -- expand and repack it
+          --debug $ "Abbreviation " ++ show a ++ "/" ++ show c ++ ", table at " ++ showHex table [] ++ ", index = " ++ show index ++ "(0x" ++ showHex index [] ++ "), entry address = " ++ showHex entry [] ++ ", string address = " ++ showHex (ix strAddr) []
           unpacked <- unpack strAddr
           zscii <- unpackedToZSCII unpacked
+          --debug $ "Unpacked abbreviation " ++ show a ++ "/" ++ show c ++ " to: " ++ map z2a zscii
           rest <- go cs 0 Nothing
           return $ zscii ++ rest
 
