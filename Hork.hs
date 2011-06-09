@@ -20,6 +20,7 @@ import Data.Array.IO
 
 import qualified Data.ByteString as B
 
+import Numeric (showHex)
 
 cmdLineArgs :: IO String
 cmdLineArgs = do

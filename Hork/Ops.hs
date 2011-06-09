@@ -60,8 +60,10 @@ ophCall ms callA (routine:args) = do
   let cs = CallState (stack st) (locals st) callA ms
   nLocals <- rb a
   debug $ "Routine has " ++ show nLocals ++ " locals."
-  newLocals <- liftIO $ newArray (0,nLocals-1) 0
-  when (v < 5) $ do
+  newLocals <- case nLocals of
+                 0 -> liftIO $ newArray (0,0) 0
+                 _ -> liftIO $ newArray (0,nLocals-1) 0
+  when (v < 5 && nLocals > 0) $ do
     mapM_ (\i -> do
       x <- rw $ a + 1 + 2* RA (fi i)
       liftIO $ writeArray newLocals i x
@@ -70,7 +72,7 @@ ophCall ms callA (routine:args) = do
 
   -- write the arguments over the locals until one or the other runs out
   let writeArgs = zip [0..nLocals-1] args
-  mapM_ (\(i,x) -> liftIO $ writeArray newLocals i (argToWord x)) writeArgs
+  when (nLocals > 0) $ mapM_ (\(i,x) -> liftIO $ writeArray newLocals i (argToWord x)) writeArgs
   debug $ "Storing arguments on top of locals."
 
   let newPC = if v < 5 then a + 1 + 2 * fi nLocals else a+1
@@ -249,7 +251,11 @@ op_jl = ophBinJump $ \a b -> return (a < b)
 
 op_jump a [offset_] = do
   let offset = argToInt offset_
-  setPC . RA . fi $ fi a + offset - 2 -- minus 2 bytes for the jump instruction itself.
+  let wordOffset = RA $ fi (abs offset)
+  let newPC = if offset < 0 -- minus 2 bytes for the jump instruction itself.
+                then a - wordOffset - 2
+                else a + wordOffset - 2
+  setPC newPC
 
 op_jz a [x_] = do
   let x = argToWord x_
