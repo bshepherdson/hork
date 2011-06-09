@@ -50,3 +50,7 @@ getArgList :: Addr a => a -> [OperandType] -> H (RawAddr, [Operand])
 getArgList a ts = return . (,) a' =<< sequence actions
   where (a', actions) = mapAccumL (\a t -> (a + (RA $ getArgSize t), getArg a t)) (RA $ ix a) ts
 
+
+showArgs :: (RawAddr, [Operand]) -> String
+showArgs (a, as) = showHex a [] ++ " [" 
+

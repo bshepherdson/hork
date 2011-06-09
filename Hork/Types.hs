@@ -70,6 +70,7 @@ data OperandCount = VAR | OP2 | OP1 | OP0 | EXT
 data OperandType = TLarge | TSmall | TVar | TNone
   deriving (Eq)
 data Operand = Large Word16 | Small Word8
+  deriving (Show)
 
 
 type Dictionary = M.Map [Word16] ByteAddr
