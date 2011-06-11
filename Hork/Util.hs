@@ -15,6 +15,7 @@ import Control.Monad
 import Control.Monad.State
 import Control.Applicative
 
+import System.IO
 
 -- returns just the specified bits, shifted so the least significant unmasked bit is bit 0
 -- Example: 0b0111_0000 [3,4,5] -> 0b0000_0110
@@ -126,6 +127,6 @@ linkedListUntil p next x = do
 
 
 debug :: String -> H ()
-debug = liftIO . putStrLn
+debug = liftIO . hPutStrLn stderr
 --debug _ = return ()
 

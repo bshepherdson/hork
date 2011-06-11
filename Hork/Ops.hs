@@ -355,10 +355,14 @@ op_print_ret a [] = do
 op_print_table = notImplemented "op_print_table"
 
 
-op_pull a [] = do
+op_pull a [v_] = do
+  let v = argToByte v_
   x <- pop
-  store a x
-  setPC $ a+1
+  case () of
+    () | v == 0x00 -> push x
+       | v <= 0x10 -> wl (v-1) x
+       | otherwise -> wg (v-0x10) x
+  setPC a
 
 op_push a [x_] = do
   let x = argToWord x_
