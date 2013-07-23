@@ -17,5 +17,5 @@ cabal-version:       >=1.8
 
 executable hork
   main-is:             Hork.hs
-  other-modules:       Hork.Mem
-  build-depends:       base ==4.5.*, lens, mtl, array
+  other-modules:       Hork.Mem, Hork.Header, Hork.Core, Hork.String
+  build-depends:       base ==4.5.*, lens, mtl, array, binary-strict, bytestring
