@@ -21,8 +21,9 @@ zinterp :: Hork ()
 zinterp = undefined
 
 
-restart :: FilePath -> IO ()
-restart file = do
+
+loadFile :: FilePath -> IO (IOUArray RA Word8)
+loadFile file = do
   -- read the file into a [Word8]
   h <- openFile file ReadMode
   size <- hFileSize h
@@ -37,8 +38,12 @@ restart file = do
         (Left err, _) -> error $ "File loading error: " ++ err
         (Right bs, _) -> bs
 
-  m <- newListArray (0, fromIntegral size - 1) bytes
+  newListArray (0, fromIntegral size - 1) bytes
 
+
+restart :: FilePath -> IO ()
+restart file = do
+  m <- loadFile file
   pc0 <- ra . BA <$> rw_ m hdrPC0
 
   let st = HorkState m [] pc0 [] file
@@ -49,6 +54,14 @@ restart file = do
     _ -> return ()
 
 
+test :: Show a => Hork a -> IO ()
+test f = do
+  m <- loadFile "Zork1.z3"
+  pc0 <- ra . BA <$> rw_ m hdrPC0
+  let st = HorkState m [] pc0 [] "Zork1.z3"
+
+  result <- runHork st f
+  print result
 
 main = do
   hSetBuffering stdout NoBuffering

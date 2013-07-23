@@ -38,12 +38,12 @@ mungeStrZ (1 : c : rest) = (++) <$> abbreviation 0 c <*> mungeStrZ rest
 mungeStrZ (2 : c : rest) = (++) <$> abbreviation 1 c <*> mungeStrZ rest
 mungeStrZ (3 : c : rest) = (++) <$> abbreviation 2 c <*> mungeStrZ rest
 
-mungeStrZ (4 : c : rest) = charMunge (+91) c rest
+mungeStrZ (4 : c : rest) = charMunge (+59) c rest
 mungeStrZ (5 : c : rest) = charMunge a2 c rest
 mungeStrZ (4 : []) = return []
 mungeStrZ (5 : []) = return []
 
-mungeStrZ (c : rest) = charMunge (+59) c rest
+mungeStrZ (c : rest) = charMunge (+91) c rest
 mungeStrZ [] = return []
 
 
@@ -54,7 +54,7 @@ charMunge f c rest | c >= 6 = (fromIntegral (f c) :) <$> mungeStrZ rest
 
 -- Maps characters for A2.
 a2 :: Word16 -> Word16
-a2 n = head $ genericDrop (n-6) (map (fromIntegral . ord) "\n0123456789.,!?_#'\"/\\-:()")
+a2 n = head $ genericDrop (n-7) (map (fromIntegral . ord) "\n0123456789.,!?_#'\"/\\-:()")
 
 
 -- Returns the [Word8] from strZ for the given abbreviation: table (0-2) and number.

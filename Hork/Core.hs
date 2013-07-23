@@ -75,6 +75,7 @@ makeLenses ''HorkState
 
 
 data Quit = Restart | Exit | Die String
+  deriving (Show)
 
 instance Error Quit where
   noMsg = Exit
