@@ -7,6 +7,7 @@ import Hork.Header
 import Control.Monad
 import Control.Monad.State.Strict
 import Control.Monad.Writer.Strict
+import Control.Monad.Error
 import Control.Applicative
 
 import Data.Bits
@@ -18,6 +19,9 @@ import Control.Lens
 import Data.Bits.Lens
 import Data.List.Lens
 
+
+import System.IO
+import System.Environment (getArgs)
 
 
 -- A stack of these is maintained in the main state, it holds the information necessary to
@@ -34,13 +38,30 @@ data HorkState = HorkState {
   _mem       :: !Mem,
   _stack     :: ![Word16],
   _pc        :: !RA,
-  _routines  :: ![RoutineState]
+  _routines  :: ![RoutineState],
+  _storyFile :: !FilePath
 }
 makeLenses ''HorkState
 
 
-newtype Hork a = Hork (StateT HorkState (WriterT [String] IO) a)
-  deriving (Functor, Monad, MonadState HorkState, MonadWriter [String], MonadIO)
+data Quit = Restart | Exit | Die String
+
+instance Error Quit where
+  noMsg = Exit
+  strMsg = Die
+
+
+newtype Hork a = Hork (ErrorT Quit (StateT HorkState (WriterT [String] IO)) a)
+  deriving (Functor, Monad, MonadState HorkState, MonadWriter [String], MonadIO, MonadError Quit)
+
+
+runHork :: HorkState -> Hork a -> IO (Either Quit a)
+runHork st (Hork f) = do
+  let mError = runErrorT f
+      mState = runStateT mError st
+      mWriter = runWriterT mState
+  fst . fst <$> mWriter
+
 
 -- Helper functions
 log :: String -> String -> Hork ()
@@ -111,7 +132,27 @@ setGlobal var val = do
   ww (table + 2*var') val
 
 
+-- startup flow:
+-- 1) main reads the command line arguments and calls launch (IO)
+-- 2) launch sets up the interpreter state, and calls restart (Hork)
+-- 3) restart calls loadFile, then forever zinterp
+
+zinterp :: Hork ()
+zinterp = undefined
 
 
-main = undefined
+loadFile :: Hork ()
+loadFile = undefined
+
+
+restart :: Hork ()
+restart = undefined
+
+launch :: FilePath -> IO ()
+launch file = undefined
+
+
+main = do
+  [file] <- getArgs
+  launch file
 
