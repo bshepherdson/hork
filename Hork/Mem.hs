@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeSynonymInstances #-}
+
 module Hork.Mem where
 
 import Data.Word
@@ -18,6 +20,7 @@ type RA = Word32
 instance Addr BA where ra (BA a) = fromIntegral a
 instance Addr WA where ra (WA a) = 2 * fromIntegral a
 instance Addr PA where ra (PA a) = 2 * fromIntegral a -- v3-specific
+instance Addr RA where ra = id
 
 
 type Mem = IOUArray RA Word8
