@@ -82,7 +82,7 @@ instance Error Quit where
 
 
 newtype Hork a = Hork (ErrorT Quit (StateT HorkState (WriterT [String] IO)) a)
-  deriving (Functor, Monad, MonadState HorkState, MonadWriter [String], MonadIO, MonadError Quit)
+  deriving (Functor, Applicative, Monad, MonadState HorkState, MonadWriter [String], MonadIO, MonadError Quit)
 
 
 runHork :: HorkState -> Hork a -> IO (Either Quit a)
