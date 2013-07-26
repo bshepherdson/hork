@@ -80,6 +80,9 @@ zbranch val = do
     _ -> pcBumpBy (delta-2)
 
 
+toInt :: Word16 -> Int16
+toInt = fromIntegral
+
 
 notImplemented :: String -> Hork ()
 notImplemented func = die $ "Unimplemented opcode: " ++ func
@@ -209,15 +212,17 @@ op_1OP_get_prop_len arg = objPropLenFromAddr (ra (BA arg)) >>= zstore
 
 
 op_1OP_inc :: Op1OP
-op_1OP_inc = incdec (+1)
+op_1OP_inc v = incdec (+1) v >> return ()
 op_1OP_dec :: Op1OP
-op_1OP_dec = incdec (subtract 1)
+op_1OP_dec v = incdec (subtract 1) v >> return ()
 
-incdec :: (Word16 -> Word16) -> Op1OP
+incdec :: (Word16 -> Word16) -> Word16 -> Hork Word16
 incdec f var = do
   let var' = fromIntegral var
   val <- getVar var'
-  setVar var' (f val)
+  let val' = f val
+  setVar var' val'
+  return val'
 
 
 op_1OP_print_addr :: Op1OP
@@ -254,7 +259,121 @@ op_1OP_not arg = zstore (complement arg)
 type Op2OP = Word16 -> Word16 -> Hork ()
 
 ops2OP :: M.Map Word8 Op2OP
-ops2OP = M.empty
+ops2OP = M.fromList [
+  (1, op_2OP_je),
+  (2, op_2OP_jl),
+  (3, op_2OP_jg),
+  (4, op_2OP_dec_chk),
+  (5, op_2OP_inc_chk),
+  (6, op_2OP_jin),
+  (7, op_2OP_test),
+  (8, op_2OP_or),
+  (9, op_2OP_and),
+  (10, op_2OP_test_attr),
+  (11, op_2OP_set_attr),
+  (12, op_2OP_clear_attr),
+  (13, op_2OP_store),
+  (14, op_2OP_insert_obj),
+  (15, op_2OP_loadw),
+  (16, op_2OP_loadb),
+  (17, op_2OP_get_prop),
+  (18, op_2OP_get_prop_addr),
+  (19, op_2OP_get_next_prop),
+  (20, op_2OP_add),
+  (21, op_2OP_sub),
+  (22, op_2OP_mul),
+  (23, op_2OP_div),
+  (24, op_2OP_mod)
+  ]
+
+
+
+op_2OP_je :: Op2OP
+op_2OP_je x y = zbranch (x == y)
+
+op_2OP_jg :: Op2OP
+op_2OP_jg ux uy = zbranch (toInt ux > toInt uy)
+
+op_2OP_jl :: Op2OP
+op_2OP_jl ux uy = zbranch (toInt ux < toInt uy)
+
+
+op_2OP_inc_chk :: Op2OP
+op_2OP_inc_chk var val = do
+  new <- incdec (+1) var
+  zbranch (toInt new > toInt val)
+
+op_2OP_dec_chk :: Op2OP
+op_2OP_dec_chk var val = do
+  new <- incdec (subtract 1) var
+  zbranch (toInt new < toInt val)
+
+
+op_2OP_jin :: Op2OP
+op_2OP_jin child parent = do
+  p <- fromIntegral <$> (rb =<< objParent child) -- v3-specific
+  zbranch (p == parent)
+
+
+op_2OP_test :: Op2OP
+op_2OP_test a b = zbranch (a .&. b == b)
+
+
+op_2OP_or :: Op2OP
+op_2OP_or a b = zstore (a .|. b)
+
+op_2OP_and :: Op2OP
+op_2OP_and a b = zstore (a .&. b)
+
+
+op_2OP_test_attr :: Op2OP
+op_2OP_test_attr obj attr = testAttr obj attr >>= zbranch
+
+op_2OP_set_attr :: Op2OP
+op_2OP_set_attr = setAttr
+
+op_2OP_clear_attr :: Op2OP
+op_2OP_clear_attr = clearAttr
+
+
+op_2OP_store :: Op2OP
+op_2OP_store var val = setVar (fromIntegral var) val
+
+
+op_2OP_insert_obj :: Op2OP
+op_2OP_insert_obj = objInsert
+
+
+
+op_2OP_loadw :: Op2OP
+op_2OP_loadw arr index = rw (ra . BA $ arr + 2 * index) >>= zstore
+
+
+op_2OP_loadb :: Op2OP
+op_2OP_loadb arr index = rb (ra . BA $ arr + index) >>= return . fromIntegral >>= zstore
+
+
+op_2OP_get_prop :: Op2OP
+op_2OP_get_prop obj prop = objPropValue obj prop >>= zstore
+
+op_2OP_get_prop_addr :: Op2OP
+op_2OP_get_prop_addr obj prop = objPropAddr obj prop >>= return . fromIntegral >>= zstore
+
+op_2OP_get_next_prop :: Op2OP
+op_2OP_get_next_prop obj prop = objNextProp obj prop >>= zstore
+
+
+math :: (Int16 -> Int16 -> Int16) -> Op2OP
+math f ux uy = zstore (fromIntegral $ f (toInt ux) (toInt uy))
+
+op_2OP_add, op_2OP_sub, op_2OP_mul, op_2OP_div, op_2OP_mod :: Op2OP
+op_2OP_add = math (+)
+op_2OP_sub = math (flip subtract)
+op_2OP_mul = math (*)
+op_2OP_div = math div
+op_2OP_mod = math mod
+
+
 
 type OpVAR = [Word16] -> Hork ()
 

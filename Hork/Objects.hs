@@ -85,6 +85,18 @@ objPropAddr num prop = do
                         | otherwise -> propSeek (a + fromIntegral propsize + 1)
 
 
+objNextProp :: Word16 -> Word16 -> Hork Word16
+objNextProp obj prop = do
+  nextAddr <- case prop of
+    0 -> objPropTableAddr obj
+    _ -> do
+      a <- objPropAddr obj prop
+      sizebyte <- rb a
+      return $ a + fromIntegral ((sizebyte `shiftR` 5) + 1)
+  b <- rb nextAddr
+  return $ fromIntegral (b .&. 31)
+
+
 -- Returns the value of a property, or the default value.
 objPropValue :: Word16 -> Word16 -> Hork Word16
 objPropValue num prop = do
@@ -141,4 +153,45 @@ objRemove me = do
           if s == me
             then return o
             else findMe s
+
+
+-- v3-specific, bytes for relatives
+objInsert :: Word16 -> Word16 -> Hork ()
+objInsert obj dest = do
+  parentAddr <- objParent obj
+  p <- fromIntegral <$> rb parentAddr
+  when (p /= 0) $ objRemove obj
+
+  -- Get the child of dest, and write obj into that slot.
+  childAddr <- objChild dest
+  c <- fromIntegral <$> rb childAddr
+  wb childAddr (fromIntegral obj)
+
+  -- finally, write dest's original child into obj's sibling slot
+  siblingAddr <- objSibling obj
+  wb siblingAddr c
+
+
+-- attrs
+
+-- Given: modifier function, object number, attr number, returns the new value
+handleAttr :: (Bool -> Bool) -> Word16 -> Word16 -> Hork Bool
+handleAttr f obj attr = do
+  a <- entryOffset (fromIntegral attr `shiftR` 8) obj
+  b <- rb a
+  let bit = fromIntegral $ 7 - (attr .&. 7)
+      val = b ^. bitAt bit
+      val' = f val
+      b' = b & bitAt bit .~ val'
+  wb a b'
+  return val'
+
+testAttr :: Word16 -> Word16 -> Hork Bool
+testAttr = handleAttr id
+
+setAttr :: Word16 -> Word16 -> Hork ()
+setAttr obj attr = handleAttr (const True) obj attr >> return ()
+
+clearAttr :: Word16 -> Word16 -> Hork ()
+clearAttr obj attr = handleAttr (const False) obj attr >> return ()
 
