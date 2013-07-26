@@ -5,6 +5,7 @@ module Hork.Ops (
 import qualified Data.Map as M
 import Hork.Core
 import Hork.String
+import Hork.Objects
 
 import Data.Char (chr)
 
@@ -171,7 +172,84 @@ op_0OP_piracy = zbranch True
 type Op1OP = Word16 -> Hork ()
 
 ops1OP :: M.Map Word8 Op1OP
-ops1OP = M.empty
+ops1OP = M.fromList [
+  (0, op_1OP_jz),
+  (1, op_1OP_get_sibling),
+  (2, op_1OP_get_child),
+  (3, op_1OP_get_parent),
+  (4, op_1OP_get_prop_len),
+  (5, op_1OP_inc),
+  (6, op_1OP_dec),
+  (7, op_1OP_print_addr),
+  --(8, op_1OP_call_1s
+  (9, op_1OP_remove_obj),
+  (10, op_1OP_print_obj),
+  (11, op_1OP_ret),
+  (12, op_1OP_jump),
+  (13, op_1OP_print_paddr),
+  (14, op_1OP_load),
+  (15, op_1OP_not)
+  ]
+
+
+op_1OP_jz :: Op1OP
+op_1OP_jz arg = zbranch (arg == 0)
+
+op_1OP_get_sibling :: Op1OP
+op_1OP_get_sibling = objSibling >=> rb >=> return . fromIntegral >=> zstore
+
+op_1OP_get_child :: Op1OP
+op_1OP_get_child = objChild >=> rb >=> return . fromIntegral >=> zstore
+
+op_1OP_get_parent :: Op1OP
+op_1OP_get_parent = objParent >=> rb >=> return . fromIntegral >=> zstore
+
+op_1OP_get_prop_len :: Op1OP
+op_1OP_get_prop_len arg = objPropLenFromAddr (ra (BA arg)) >>= zstore
+
+
+op_1OP_inc :: Op1OP
+op_1OP_inc = incdec (+1)
+op_1OP_dec :: Op1OP
+op_1OP_dec = incdec (subtract 1)
+
+incdec :: (Word16 -> Word16) -> Op1OP
+incdec f var = do
+  let var' = fromIntegral var
+  val <- getVar var'
+  setVar var' (f val)
+
+
+op_1OP_print_addr :: Op1OP
+op_1OP_print_addr = printZ . BA
+
+op_1OP_print_paddr :: Op1OP
+op_1OP_print_paddr = printZ . PA
+
+
+
+op_1OP_remove_obj :: Op1OP
+op_1OP_remove_obj = objRemove
+
+
+op_1OP_print_obj :: Op1OP
+op_1OP_print_obj = objPrintShortName
+
+
+op_1OP_ret :: Op1OP
+op_1OP_ret = zreturn
+
+op_1OP_jump :: Op1OP
+op_1OP_jump uArg = pcBumpBy (fromIntegral uArg)
+
+
+op_1OP_load :: Op1OP
+op_1OP_load arg = getVar (fromIntegral arg) >>= zstore
+
+
+op_1OP_not :: Op1OP
+op_1OP_not arg = zstore (complement arg)
+
 
 type Op2OP = Word16 -> Word16 -> Hork ()
 
