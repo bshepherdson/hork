@@ -3,6 +3,7 @@ module Main where
 
 import Hork.Core
 import Hork.String
+import Hork.Ops
 
 import System.IO
 import System.Environment (getArgs)
@@ -17,8 +18,49 @@ import qualified Data.ByteString as B
 -- 2) launch sets up the interpreter state, and calls restart (Hork)
 -- 3) restart calls loadFile, then forever zinterp
 
+
+-- zinterp flow:
+-- * Read the first byte of the opcode at PC.
+-- * Determine the form of the opcode.
+-- * Determine the types of the arguments.
+-- * Read the arguments - in the right order!
+-- * Execute the opcode handler (includes storing and branching if applicable)
+-- * PC now points at the next opcode, wherever that is.
+-- * DO NOT recurse; zinterp is called with `forever`.
+
 zinterp :: Hork ()
-zinterp = undefined
+zinterp = do
+  -- determine the form
+  opcode <- pcGet
+  case opcode `shiftR` 6 of
+    3 -> zinterpVariable opcode
+    2 -> zinterpShort opcode
+    _ -> zinterpLong opcode
+
+
+zinterpShort :: Word8 -> Hork ()
+zinterpShort opcode = do
+  let argtype = opcode `shiftR` 4 .&. 3
+  case argtype of
+    3 -> zinterp0OP opcode
+    a -> zinterp1OP opcode a
+
+
+zinterpLong :: Word8 -> Hork ()
+zinterpLong opcode = do
+  let arg1 = 1 + (opcode `shiftR` 6 .&. 1)
+      arg2 = 1 + (opcode `shiftR` 5 .&. 1)
+  zinterp2OP opcode arg1 arg2
+
+
+zinterpVariable :: Word8 -> Hork ()
+zinterpVariable opcode = do
+  typebyte <- pcGet
+  let args = takeWhile (< 3) $ map (\n -> typebyte `shiftR` n .&. 3) [6, 4, 2, 0]
+  -- TODO: Special handling for je VAR form
+  case opcode ^. bitAt 5 of
+    False -> zinterp2OP opcode (head args) (head $ tail args)
+    True  -> zinterpVAR opcode args
 
 
 

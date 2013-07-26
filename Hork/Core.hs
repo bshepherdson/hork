@@ -5,13 +5,19 @@ module Hork.Core (
   Quit(..),
   Hork(..),
   runHork,
-  debug,
+  debug, die,
   rb, wb, rw, ww,
   pcBump,
   pcBumpBy,
+  pcGet, pcGetWord,
   push, pop,
   getLocal, setLocal,
   getGlobal, setGlobal,
+  getVar, setVar,
+  getArg,
+
+  locals, oldPC, oldStack,
+  mem, stack, pc, routines, storyFile,
 
   module Hork.Mem,
   module Hork.Header,
@@ -81,6 +87,8 @@ instance Error Quit where
   noMsg = Exit
   strMsg = Die
 
+die :: String -> Hork a
+die = throwError . Die
 
 newtype Hork a = Hork (ErrorT Quit (StateT HorkState (WriterT [String] IO)) a)
   deriving (Functor, Applicative, Monad, MonadState HorkState, MonadWriter [String], MonadIO, MonadError Quit)
@@ -122,11 +130,26 @@ ww a v = do
 
 
 -- other helpers
-pcBumpBy :: Word16 -> Hork ()
-pcBumpBy delta = pc += ra (BA delta)
+pcBumpBy :: Int16 -> Hork ()
+pcBumpBy delta | delta < 0 = pc -= ra (BA (fromIntegral (abs delta)))
+               | otherwise = pc += ra (BA (fromIntegral delta))
 
 pcBump :: Hork ()
 pcBump = pcBumpBy 1
+
+pcGet :: Hork Word8
+pcGet = do
+  a <- use pc
+  b <- rb a
+  pcBump
+  return b
+
+pcGetWord :: Hork Word16
+pcGetWord = do
+  a <- use pc
+  w <- rw a
+  pcBumpBy 2
+  return w
 
 
 -- variables
@@ -138,10 +161,10 @@ pcBump = pcBumpBy 1
 -- locals and the stack can be handled with lenses, globals can't.
 
 getLocal :: Word8 -> Hork Word16
-getLocal var = use $ singular $ routines . _head . locals . element (fromIntegral var)
+getLocal var = use $ singular $ routines . _head . locals . element (fromIntegral (var-1))
 
 setLocal :: Word8 -> Word16 -> Hork ()
-setLocal var val = routines . _head . locals . element (fromIntegral var) .= val
+setLocal var val = routines . _head . locals . element (fromIntegral (var-1)) .= val
 
 push :: Word16 -> Hork ()
 push val = stack %= (val:)
@@ -161,4 +184,22 @@ setGlobal var val = do
   let var' = fromIntegral var - 16
   table <- ra . BA <$> rw hdrGLOBALS
   ww (table + 2*var') val
+
+
+getVar :: Word8 -> Hork Word16
+getVar 0 = pop
+getVar n | n < 16    = getLocal n
+         | otherwise = getGlobal n
+
+setVar :: Word8 -> Word16 -> Hork ()
+setVar 0 val = push val
+setVar n val | n < 16    = setLocal n val
+             | otherwise = setGlobal n val
+
+
+getArg :: Word8 -> Hork Word16
+getArg 0 = pcGetWord
+getArg 1 = fromIntegral <$> pcGet
+getArg 2 = pcGet >>= getVar
+
 
