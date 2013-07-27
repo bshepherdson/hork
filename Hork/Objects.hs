@@ -124,6 +124,16 @@ objPropLenFromAddr a = do
 
 
 
+objPutProp :: Word16 -> Word16 -> Word16 -> Hork ()
+objPutProp obj prop val = do
+  a <- objPropAddr obj prop
+  size <- objPropLenFromAddr a
+  case size of
+    1 -> wb (a+1) (fromIntegral val)
+    2 -> ww (a+1) val
+    _ -> die "Illegal operation: Tried to put_prop for a property whose length is more than 2"
+
+
 -- Removes an object from the tree, so it has parent 0. It keeps its children.
 -- v3-specific: using bytes, not words, for the relative pointers
 objRemove :: Word16 -> Hork ()

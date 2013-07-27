@@ -2,7 +2,7 @@ module Hork.String where
 
 import Hork.Core
 
-import Data.Char (ord,chr)
+import Data.Char (ord, chr, toLower)
 
 
 -- Approach: pull the string of characters out of memory, then munge it.
@@ -54,8 +54,10 @@ charMunge f c rest | c >= 6 = (fromIntegral (f c) :) <$> mungeStrZ rest
 
 -- Maps characters for A2.
 a2 :: Word16 -> Word16
-a2 n = head $ genericDrop (n-7) (map (fromIntegral . ord) "\n0123456789.,!?_#'\"/\\-:()")
+a2 n = head $ genericDrop (n-7) (map (fromIntegral . ord) a2Chars)
 
+a2Chars :: [Char]
+a2Chars = "\n0123456789.,!?_#'\"/\\-:()"
 
 -- Returns the [Word8] from strZ for the given abbreviation: table (0-2) and number.
 abbreviation :: Word16 -> Word16 -> Hork [Word8]
@@ -78,5 +80,103 @@ strZ = fmap fst . strLenZ
 printZ :: Addr a => a -> Hork ()
 printZ = liftIO . putStr . map (chr . fromIntegral) <=< strZ
 
--- START HERE: This is untested. This may be Haskell, but there's a lot of complex
--- business logic here; it bears testing. Load Zork and print some strings from it.
+
+
+-- reading
+
+-- Takes the text buffer and parse buffer.
+-- First reads from the keyboard into textbuf, until a carriage return
+-- Then it splits into words, populating parsebuf.
+-- Finally it tries to look the words up in the dictionary,
+-- populating that info in parsebuf as well.
+strRead :: Word16 -> Word16 -> Hork ()
+strRead textbuf_ parsebuf_ = do
+  -- TODO: Redisplay the status line here.
+  let [textbuf, parsebuf] = map (ra.BA) [textbuf_, parsebuf_]
+
+  -- read from the keyboard until a CR
+  maxlen <- rb textbuf
+  line <- genericTake maxlen <$> liftIO getLine
+  -- write that text to textbuf
+  let line' = map (fromIntegral . ord . toLower) line ++ [0] -- 0 terminator
+  mapM_ (uncurry wb) (zip [textbuf+1..] line')
+
+  liftIO $ putStrLn "" -- newline
+
+  -- now for lexical analysis
+  -- HACK: assuming the parse-buffer is long enough
+  -- first, retrieve the dictionary word separators (comma, etc.)
+  -- these are in a header of the dictionary
+  sepCount <- rb hdrDICTIONARY
+  seps <- mapM (rb . (hdrDICTIONARY+)) [1..fromIntegral sepCount]
+
+  -- next, split the text into words, including these separators
+  -- this needs to be done manually D: because we need the position of the first letters
+  let split i (32:rest) [] = split (i+1) rest []
+      split i (32:rest) sofar = (i, reverse sofar) : split (i + 1 + length sofar) rest []
+      split _ [] [] = []
+      split i [] sofar = [(i, reverse sofar)]
+      split i (c:cs) sofar | c `elem` seps = (if null sofar then id else ((i, reverse sofar) :)) ((i + length sofar, c:[]) : split (i + length sofar + 1) cs [])
+                           | otherwise = split i cs (c:sofar)
+
+      wds = split 0 line' []
+
+  parsed <- mapM parse wds
+  -- we've got the parse data now, so write it into the parse buffer
+  -- first we write the number of words
+  wb (parsebuf + 1) (genericLength parsed)
+  mapM_ (\(target, (pos, word, addr)) -> do
+      ww target (fromIntegral addr)
+      wb (target+2) (genericLength word)
+      wb (target+3) (fromIntegral pos)
+    ) (zip [parsebuf + 2, parsebuf + 6 ..] parsed)
+
+
+
+parse :: (Int, [Word8]) -> Hork (Int, [Word8], RA)
+parse (pos, word) = do
+  let encoded = encode word
+  -- now search in the dictionary for the same word.
+  addr <- dictSearch encoded
+  return (pos, word, addr)
+
+
+dictSearch :: [Word16] -> Hork RA
+dictSearch [a,b] = do
+  dict <- ra . BA <$> rw hdrDICTIONARY
+  sepCount <- fromIntegral <$> rb dict
+  entrySize <- rb (dict + sepCount + 1)
+  entryCount <- rw (dict + sepCount + 2)
+  let top = dict + sepCount + 4
+
+  match <- take 1 . concat <$> (forM [top, top + fromIntegral entrySize .. top + fromIntegral entrySize * fromIntegral (entryCount-1)] $ \e -> do
+    ea <- rw e
+    case ea == a of
+      False -> return []
+      True  -> do
+        eb <- rw (e+2)
+        case eb == b of
+          False -> return []
+          True  -> return [e]
+    )
+
+  case match of
+    []  -> return 0
+    [m] -> return (m+4)
+
+
+-- encodes a word into dictionary format: 6 Z-characters (2 words) and pads out with 5s.
+encode :: [Word8] -> [Word16]
+encode cs = collect (take 3 chars) : (collect (drop 3 chars) + bit 15) : []
+  where chars :: [Word8]
+        chars = take 6 . (++ repeat 5) . concatMap encodeChar $ cs
+        collect :: [Word8] -> Word16
+        collect [a,b,c] = (0 :: Word16) .|. fromIntegral c .|. (fromIntegral b `shiftL` 5) .|. (fromIntegral a `shiftL` 10)
+        encodeChar 32 = [0]
+        encodeChar c | 97 <= c && c <= 122 = [c - 91]
+                     | otherwise = case elemIndex (chr (fromIntegral c)) a2Chars of
+                                     Just i  -> [5, 7 + fromIntegral i]
+                                     Nothing -> let (a,b) = (c `shiftR` 5, c .&. 31)
+                                                in  [5, 6, a, b]
+
+

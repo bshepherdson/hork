@@ -9,6 +9,8 @@ import Hork.Objects
 
 import Data.Char (chr)
 
+import System.Random
+
 
 zinterp0OP :: Word8 -> Hork ()
 zinterp0OP opcode = do
@@ -86,6 +88,9 @@ toInt = fromIntegral
 
 notImplemented :: String -> Hork ()
 notImplemented func = die $ "Unimplemented opcode: " ++ func
+
+illegalArgument :: String -> Hork ()
+illegalArgument msg = die $ "Illegal arguments to a VAR op: " ++ msg
 
 -----------------------------------------------------------
 -- 0OP instructions
@@ -378,5 +383,104 @@ op_2OP_mod = math mod
 type OpVAR = [Word16] -> Hork ()
 
 opsVAR :: M.Map Word8 OpVAR
-opsVAR = M.empty
+opsVAR = M.fromList [
+  (0, op_VAR_call),
+  (1, op_VAR_storew),
+  (2, op_VAR_storeb),
+  (3, op_VAR_put_prop),
+  (4, op_VAR_read),
+  (5, op_VAR_print_char),
+  (6, op_VAR_print_num),
+  (7, op_VAR_random),
+  (8, op_VAR_push),
+  (9, op_VAR_pull),
+  (10, op_VAR_split_window),
+  (11, op_VAR_set_window),
+  (19, op_VAR_output_stream)
+  ]
+
+
+
+op_VAR_call :: OpVAR
+op_VAR_call [] = illegalArgument "call with no routine"
+op_VAR_call (0:_) = zstore 0 -- automatically return false when the call is to 0.
+op_VAR_call (routine:args) = do
+  pc_ <- use pc
+  stack_ <- use stack
+
+  let addr = ra (PA routine)
+  localCount <- rb addr
+  initialValues <- mapM (\i -> rw (addr + 1 + 2 * fromIntegral i)) [1..localCount]
+  let finalLocals = genericTake localCount $ zipWith combine (map Just args ++ repeat Nothing) (map Just initialValues ++ repeat Nothing)
+      routState = RoutineState finalLocals pc_ stack_
+  stack .= []
+  routines %= (routState:)
+  pc .= addr + 1 + 2 * fromIntegral localCount
+ where combine Nothing Nothing  = undefined -- can't happen
+       combine Nothing (Just y) = y
+       combine (Just x) _       = x
+
+
+op_VAR_storew :: OpVAR
+op_VAR_storew [arr, index, val] = ww (ra . BA $ arr + 2 * index) val
+op_VAR_storew _ = illegalArgument "storew without 3 args"
+
+
+op_VAR_storeb :: OpVAR
+op_VAR_storeb [arr, index, val] = wb (ra . BA $ arr + index) (fromIntegral val)
+op_VAR_storeb _ = illegalArgument "storeb without 3 args"
+
+
+op_VAR_put_prop :: OpVAR
+op_VAR_put_prop [obj, prop, val] = objPutProp obj prop val
+op_VAR_put_prop _ = illegalArgument "put_prop without 3 args"
+
+
+op_VAR_read :: OpVAR
+op_VAR_read [text, parse] = strRead text parse
+op_VAR_read _ = illegalArgument "read without 2 args"
+
+
+op_VAR_print_char :: OpVAR
+op_VAR_print_char [c] = liftIO $ putChar (chr (fromIntegral c))
+op_VAR_print_char _ = illegalArgument "print_char without 1 arg"
+
+
+op_VAR_print_num :: OpVAR
+op_VAR_print_num [n] = liftIO $ print (toInt n)
+op_VAR_print_num _ = illegalArgument "print_num without 1 arg"
+
+
+op_VAR_random :: OpVAR
+op_VAR_random [range_] = do
+  let range = toInt range_
+  case range < 0 of
+    True  -> do
+      -- Setting the seed.
+      let g = mkStdGen (- fromIntegral range)
+      liftIO $ setStdGen g
+      zstore 0
+    False -> do
+      r <- liftIO $ randomRIO (1, range)
+      zstore (fromIntegral r)
+op_VAR_random _ = illegalArgument "random without 1 arg"
+
+
+op_VAR_push :: OpVAR
+op_VAR_push [val] = push val
+op_VAR_push _ = illegalArgument "push without 1 arg"
+
+op_VAR_pull :: OpVAR
+op_VAR_pull [var] = do
+  val <- pop
+  setVar (fromIntegral var) val
+op_VAR_pull _ = illegalArgument "pull without 1 arg"
+
+
+op_VAR_split_window :: OpVAR
+op_VAR_split_window _ = notImplemented "split_window"
+op_VAR_set_window :: OpVAR
+op_VAR_set_window _ = notImplemented "set_window"
+op_VAR_output_stream :: OpVAR
+op_VAR_output_stream _ = notImplemented "output_stream"
 
