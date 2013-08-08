@@ -19,6 +19,8 @@ module Hork.Core (
   locals, oldPC, oldStack,
   mem, stack, pc, routines, storyFile,
 
+  showHex,
+
   module Hork.Mem,
   module Hork.Header,
   module Control.Monad,
@@ -56,6 +58,8 @@ import Data.List
 import Data.Array.IO hiding (index)
 import Data.Array.MArray hiding (index)
 
+import qualified Numeric (showHex)
+
 import Control.Lens
 import Data.Bits.Lens
 import Data.List.Lens
@@ -88,7 +92,10 @@ instance Error Quit where
   strMsg = Die
 
 die :: String -> Hork a
-die = throwError . Die
+die msg = do
+  (_, debug) <- listen $ return ()
+  liftIO $ print debug
+  throwError $ Die msg
 
 newtype Hork a = Hork (ErrorT Quit (StateT HorkState (WriterT [String] IO)) a)
   deriving (Functor, Applicative, Monad, MonadState HorkState, MonadWriter [String], MonadIO, MonadError Quit)
@@ -198,8 +205,22 @@ setVar n val | n < 16    = setLocal n val
 
 
 getArg :: Word8 -> Hork Word16
-getArg 0 = pcGetWord
-getArg 1 = fromIntegral <$> pcGet
-getArg 2 = pcGet >>= getVar
+getArg 0 = do
+  x <- pcGetWord
+  tell ["(W " ++ showHex x ++ ")"]
+  return x
+getArg 1 = do
+  x <- fromIntegral <$> pcGet
+  tell ["(B " ++ showHex x ++ ")"]
+  return x
+getArg 2 = do
+  v <- pcGet
+  x <- getVar v
+  tell ["(V " ++ show v ++ " = " ++ showHex x ++ ")"]
+  return x
 
+
+
+showHex :: (Show a, Integral a) => a -> String
+showHex x = Numeric.showHex x ""
 

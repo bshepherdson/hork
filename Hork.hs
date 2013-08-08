@@ -31,7 +31,10 @@ import qualified Data.ByteString as B
 zinterp :: Hork ()
 zinterp = do
   -- determine the form
+  addr <- use pc
+  liftIO $ putStrLn $ showHex addr
   opcode <- pcGet
+  tell ["Op (0x" ++ showHex addr ++ "): " ++ showHex opcode]
   case opcode `shiftR` 6 of
     3 -> zinterpVariable opcode
     2 -> zinterpShort opcode
@@ -41,6 +44,7 @@ zinterp = do
 zinterpShort :: Word8 -> Hork ()
 zinterpShort opcode = do
   let argtype = opcode `shiftR` 4 .&. 3
+  tell ["short form", "arg type: " ++ show argtype]
   case argtype of
     3 -> zinterp0OP opcode
     a -> zinterp1OP opcode a
@@ -50,6 +54,7 @@ zinterpLong :: Word8 -> Hork ()
 zinterpLong opcode = do
   let arg1 = 1 + (opcode `shiftR` 6 .&. 1)
       arg2 = 1 + (opcode `shiftR` 5 .&. 1)
+  tell ["long form", show arg1, show arg2]
   zinterp2OP opcode arg1 arg2
 
 
@@ -58,9 +63,11 @@ zinterpVariable opcode = do
   typebyte <- pcGet
   let args = takeWhile (< 3) $ map (\n -> typebyte `shiftR` n .&. 3) [6, 4, 2, 0]
   -- TODO: Special handling for je VAR form
-  case opcode ^. bitAt 5 of
-    False -> zinterp2OP opcode (head args) (head $ tail args)
-    True  -> zinterpVAR opcode args
+  tell $ "variable form" : map show args
+  case (opcode, opcode ^. bitAt 5) of
+    (0xc1, _)  -> zinterpVAR opcode args -- VAR format je, special case
+    (_, False) -> zinterp2OP opcode (head args) (head $ tail args)
+    (_, True)  -> zinterpVAR opcode args
 
 
 
@@ -89,7 +96,9 @@ restart file = do
   pc0 <- ra . BA <$> rw_ m hdrPC0
 
   let st = HorkState m [] pc0 [] file
-  result <- runHork st $ forever zinterp
+  result <- runHork st $ forever $ do
+              (_, w) <- listen zinterp
+              liftIO $ print w
   case result of
     Left Restart   -> restart file
     Left (Die msg) -> putStrLn $ "Fatal error: " ++ msg

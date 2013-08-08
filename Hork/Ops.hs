@@ -29,6 +29,7 @@ zinterp1OP opcode typ = do
 
 zinterp2OP :: Word8 -> Word8 -> Word8 -> Hork ()
 zinterp2OP opcode typ1 typ2 = do
+  tell ["real 2OP"]
   let num = opcode .&. 31
   arg1 <- getArg typ1
   arg2 <- getArg typ2
@@ -38,11 +39,13 @@ zinterp2OP opcode typ1 typ2 = do
 
 zinterpVAR :: Word8 -> [Word8] -> Hork ()
 zinterpVAR opcode types = do
-  let num = opcode .&. 31
+  tell ["real var"]
   args <- mapM getArg types
-  case M.lookup num opsVAR of
-    Nothing -> die $ "No such VAR opcode: " ++ show num
-    Just op -> op args
+  let num = opcode .&. 31
+  case (opcode, M.lookup num opsVAR) of
+    (0xc1, _)    -> op_VAR_je args
+    (_, Nothing) -> die $ "No such VAR opcode: " ++ show num
+    (_, Just op) -> op args
 
 
 
@@ -52,20 +55,24 @@ zinterpVAR opcode types = do
 
 zreturn :: Word16 -> Hork ()
 zreturn value = do
+  tell ["returning " ++ showHex value]
   rts <- head <$> use routines
   stack .= rts ^. oldStack
   pc .= rts ^. oldPC
+  routines %= tail
   zstore value
 
 zstore :: Word16 -> Hork ()
 zstore value = do
   b <- pcGet
+  tell ["storing " ++ showHex value ++ " -> " ++ show b]
   setVar b value
 
 
 zbranch :: Bool -> Hork ()
 zbranch val = do
   b1 <- pcGet
+  tell ["branch byte 1 = " ++ showHex b1 ++ ", " ++ show val]
   let doBranch = val == (b1 ^. bitAt 7)
       isShort  = b1 ^. bitAt 6
   delta <- case isShort of
@@ -76,10 +83,12 @@ zbranch val = do
       let w = fromIntegral (b1 .&. 63) `shiftL` 8 + fromIntegral b2 :: Int16
       -- sign-extend from 14 bits to 16
       return $ if w ^. bitAt 13 then w .|. (3 `shiftL` 14) else fromIntegral w :: Int16
-  case delta of
-    0 -> zreturn 0
-    1 -> zreturn 1
-    _ -> pcBumpBy (delta-2)
+  case doBranch of
+    False -> tell ["skipping branch"]
+    True  -> case delta of
+        0 -> tell ["branch: return false"] >> zreturn 0
+        1 -> tell ["branch: return true"]  >> zreturn 1
+        _ -> tell ["branch by " ++ show (delta-2)] >> pcBumpBy (delta-2)
 
 
 toInt :: Word16 -> Int16
@@ -127,6 +136,7 @@ op_0OP_print :: Op0OP
 op_0OP_print = do
   (s, len) <- use pc >>= strLenZ
   liftIO . putStr $ map (chr . fromIntegral) s
+  liftIO $ print len
   pcBumpBy (2 * fromIntegral len)
 
 op_0OP_print_ret :: Op0OP
@@ -204,10 +214,19 @@ op_1OP_jz :: Op1OP
 op_1OP_jz arg = zbranch (arg == 0)
 
 op_1OP_get_sibling :: Op1OP
-op_1OP_get_sibling = objSibling >=> rb >=> return . fromIntegral >=> zstore
+op_1OP_get_sibling obj = do
+  a <- objSibling obj
+  sib <- fromIntegral <$> rb a
+  zstore sib
+  zbranch (sib > 0)
+
 
 op_1OP_get_child :: Op1OP
-op_1OP_get_child = objChild >=> rb >=> return . fromIntegral >=> zstore
+op_1OP_get_child obj = do
+  a <- objChild obj
+  c <- fromIntegral <$> rb a
+  zstore c
+  zbranch (c > 0)
 
 op_1OP_get_parent :: Op1OP
 op_1OP_get_parent = objParent >=> rb >=> return . fromIntegral >=> zstore
@@ -250,7 +269,7 @@ op_1OP_ret :: Op1OP
 op_1OP_ret = zreturn
 
 op_1OP_jump :: Op1OP
-op_1OP_jump uArg = pcBumpBy (fromIntegral uArg)
+op_1OP_jump uArg = pcBumpBy (toInt uArg - 2) -- Have to adjust by -2 like for branches.
 
 
 op_1OP_load :: Op1OP
@@ -294,7 +313,7 @@ ops2OP = M.fromList [
 
 
 op_2OP_je :: Op2OP
-op_2OP_je x y = zbranch (x == y)
+op_2OP_je x y = op_VAR_je [x,y]
 
 op_2OP_jg :: Op2OP
 op_2OP_jg ux uy = zbranch (toInt ux > toInt uy)
@@ -410,9 +429,10 @@ op_VAR_call (routine:args) = do
 
   let addr = ra (PA routine)
   localCount <- rb addr
-  initialValues <- mapM (\i -> rw (addr + 1 + 2 * fromIntegral i)) [1..localCount]
+  initialValues <- mapM (\i -> rw (addr + 1 + 2 * fromIntegral i)) [0..localCount-1]
   let finalLocals = genericTake localCount $ zipWith combine (map Just args ++ repeat Nothing) (map Just initialValues ++ repeat Nothing)
       routState = RoutineState finalLocals pc_ stack_
+  liftIO $ putStrLn $ "Locals: " ++ show finalLocals ++ ", initialValues: " ++ show initialValues ++ ", args: " ++ show args
   stack .= []
   routines %= (routState:)
   pc .= addr + 1 + 2 * fromIntegral localCount
@@ -483,4 +503,10 @@ op_VAR_set_window :: OpVAR
 op_VAR_set_window _ = notImplemented "set_window"
 op_VAR_output_stream :: OpVAR
 op_VAR_output_stream _ = notImplemented "output_stream"
+
+
+op_VAR_je :: OpVAR
+op_VAR_je [a] = zbranch False
+op_VAR_je (a:rest) = zbranch (any (== a) rest)
+op_VAR_je _ = illegalArgument "je with no arguments"
 

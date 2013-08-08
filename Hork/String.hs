@@ -72,7 +72,7 @@ strLenZ :: Addr a => a -> Hork ([Word8], Int)
 strLenZ a = do
   str <- rawStrZ a
   str' <- mungeStrZ str
-  return (str', length str)
+  return (str', length str `div` 3)
 
 strZ :: Addr a => a -> Hork [Word8]
 strZ = fmap fst . strLenZ
