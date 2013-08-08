@@ -93,12 +93,16 @@ strRead :: Word16 -> Word16 -> Hork ()
 strRead textbuf_ parsebuf_ = do
   -- TODO: Redisplay the status line here.
   let [textbuf, parsebuf] = map (ra.BA) [textbuf_, parsebuf_]
+  liftIO $ putStrLn $ "Buffers: " ++ showHex textbuf ++ ", " ++ showHex parsebuf
 
   -- read from the keyboard until a CR
   maxlen <- rb textbuf
+  liftIO $ putStrLn $ "Maxlen: " ++ show maxlen
   line <- genericTake maxlen <$> liftIO getLine
   -- write that text to textbuf
   let line' = map (fromIntegral . ord . toLower) line ++ [0] -- 0 terminator
+
+  liftIO $ putStrLn $ line ++ " -> " ++ show line'
   mapM_ (uncurry wb) (zip [textbuf+1..] line')
 
   liftIO $ putStrLn "" -- newline
@@ -107,21 +111,25 @@ strRead textbuf_ parsebuf_ = do
   -- HACK: assuming the parse-buffer is long enough
   -- first, retrieve the dictionary word separators (comma, etc.)
   -- these are in a header of the dictionary
-  sepCount <- rb hdrDICTIONARY
-  seps <- mapM (rb . (hdrDICTIONARY+)) [1..fromIntegral sepCount]
+  dict <- ra . BA <$> rw hdrDICTIONARY
+  sepCount <- rb dict
+  seps <- mapM (rb . (dict+)) [1..fromIntegral sepCount]
+  liftIO $ putStrLn $ "sepCount " ++ show sepCount ++ ", seps = " ++ show seps
 
   -- next, split the text into words, including these separators
   -- this needs to be done manually D: because we need the position of the first letters
   let split i (32:rest) [] = split (i+1) rest []
-      split i (32:rest) sofar = (i, reverse sofar) : split (i + 1 + length sofar) rest []
+      split i (32:rest) sofar = (i+1, reverse sofar) : split (i + 1 + length sofar) rest []
       split _ [] [] = []
-      split i [] sofar = [(i, reverse sofar)]
-      split i (c:cs) sofar | c `elem` seps = (if null sofar then id else ((i, reverse sofar) :)) ((i + length sofar, c:[]) : split (i + length sofar + 1) cs [])
+      split i [] sofar = [(i+1, reverse sofar)]
+      split i (c:cs) sofar | c `elem` seps = (if null sofar then id else ((i+1, reverse sofar) :)) ((i + 1 + length sofar, c:[]) : split (i + 2 + length sofar) cs [])
                            | otherwise = split i cs (c:sofar)
 
-      wds = split 0 line' []
+      wds = split 0 (init line') [] -- ignore the 0 terminator
 
+  liftIO $ print wds
   parsed <- mapM parse wds
+  liftIO $ print parsed
   -- we've got the parse data now, so write it into the parse buffer
   -- first we write the number of words
   wb (parsebuf + 1) (genericLength parsed)
