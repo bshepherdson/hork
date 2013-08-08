@@ -92,10 +92,7 @@ instance Error Quit where
   strMsg = Die
 
 die :: String -> Hork a
-die msg = do
-  (_, debug) <- listen $ return ()
-  liftIO $ print debug
-  throwError $ Die msg
+die = throwError . Die
 
 newtype Hork a = Hork (ErrorT Quit (StateT HorkState (WriterT [String] IO)) a)
   deriving (Functor, Applicative, Monad, MonadState HorkState, MonadWriter [String], MonadIO, MonadError Quit)

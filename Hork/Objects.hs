@@ -51,7 +51,6 @@ objChild = entryOffset 6
 entryOffset :: Word32 -> Word16 -> Hork RA
 entryOffset offset num = do
   obj <- objEntry num
-  liftIO $ putStrLn $ "objEntry for " ++ show num ++ " at " ++ showHex obj
   return (obj + offset)
 
 -- Address of the length byte for the object's short name, at the beginning of its property table.
@@ -82,14 +81,12 @@ objPrintShortName num = objShortNameAddr num >>= printZ
 objPropAddr :: Word16 -> Word16 -> Hork RA
 objPropAddr num prop = do
   table <- objFirstProp num
-  liftIO $ putStrLn $ "proptable @ " ++ showHex table
   -- iteratively search for the property
   propSeek table
  where propSeek a = do
           sizebyte <- rb a
           let propnum = sizebyte .&. 31
               propsize = (sizebyte `shiftR` 5) + 1
-          liftIO $ putStrLn $ "seeking. found prop " ++ show propnum ++ " at " ++ showHex a ++ " of size " ++ show propsize
           case () of () | propnum < fromIntegral prop  -> return 0
                         | propnum == fromIntegral prop -> return a
                         | otherwise -> propSeek (a + fromIntegral propsize + 1)
@@ -140,7 +137,6 @@ objPutProp obj prop val = do
   a <- objPropAddr obj prop
   e <- objEntry obj
   objPrintShortName obj
-  liftIO $ putStrLn $ "obj " ++ show obj ++ " @ " ++ showHex e ++ " prop " ++ show prop ++ " at " ++ showHex a
   size <- objPropLenFromAddr a
   case size of
     1 -> wb (a+1) (fromIntegral val)
@@ -184,7 +180,6 @@ objInsert :: Word16 -> Word16 -> Hork ()
 objInsert obj dest = do
   parentAddr <- objParent obj
   p <- fromIntegral <$> rb parentAddr
-  liftIO $ putStrLn $ "insert: obj " ++ show obj ++ ", parent @ " ++ showHex parentAddr ++ " = " ++ show p
   when (p /= 0) $ objRemove obj
 
   -- Get the child of dest, and write obj into that slot.

@@ -12,6 +12,7 @@ import Data.Binary.Strict.Get
 import qualified Data.ByteString as B
 
 
+debugging = False
 
 -- startup flow:
 -- 1) main reads the command line arguments and calls launch (IO)
@@ -32,7 +33,6 @@ zinterp :: Hork ()
 zinterp = do
   -- determine the form
   addr <- use pc
-  liftIO $ putStrLn $ showHex addr
   opcode <- pcGet
   tell ["Op (0x" ++ showHex addr ++ "): " ++ showHex opcode]
   case opcode `shiftR` 6 of
@@ -98,7 +98,7 @@ restart file = do
   let st = HorkState m [] pc0 [] file
   result <- runHork st $ forever $ do
               (_, w) <- listen zinterp
-              liftIO $ print w
+              when debugging $ liftIO $ print w
   case result of
     Left Restart   -> restart file
     Left (Die msg) -> putStrLn $ "Fatal error: " ++ msg

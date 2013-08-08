@@ -136,7 +136,6 @@ op_0OP_print :: Op0OP
 op_0OP_print = do
   (s, len) <- use pc >>= strLenZ
   liftIO . putStr $ map (chr . fromIntegral) s
-  liftIO $ print len
   pcBumpBy (2 * fromIntegral len)
 
 op_0OP_print_ret :: Op0OP
@@ -432,7 +431,6 @@ op_VAR_call (routine:args) = do
   initialValues <- mapM (\i -> rw (addr + 1 + 2 * fromIntegral i)) [0..localCount-1]
   let finalLocals = genericTake localCount $ zipWith combine (map Just args ++ repeat Nothing) (map Just initialValues ++ repeat Nothing)
       routState = RoutineState finalLocals pc_ stack_
-  liftIO $ putStrLn $ "Locals: " ++ show finalLocals ++ ", initialValues: " ++ show initialValues ++ ", args: " ++ show args
   stack .= []
   routines %= (routState:)
   pc .= addr + 1 + 2 * fromIntegral localCount
