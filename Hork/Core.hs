@@ -16,8 +16,8 @@ module Hork.Core (
   getVar, setVar,
   getArg,
 
-  locals, oldPC, oldStack,
-  mem, stack, pc, routines, storyFile,
+  locals, oldPC, oldStack, doStore,
+  mem, stack, pc, routines, storyFile, version,
   doVersion, byVersion, pa,
 
   showHex,
@@ -70,7 +70,8 @@ import Data.List.Lens
 data RoutineState = RoutineState {
   _locals    :: ![Word16],
   _oldPC     :: !RA,
-  _oldStack  :: ![Word16]
+  _oldStack  :: ![Word16],
+  _doStore   :: !Bool
 }
 makeLenses ''RoutineState
 

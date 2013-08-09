@@ -35,9 +35,11 @@ zinterp = do
   addr <- use pc
   opcode <- pcGet
   tell ["Op (0x" ++ showHex addr ++ "): " ++ showHex opcode]
-  case opcode `shiftR` 6 of
-    3 -> zinterpVariable opcode
-    2 -> zinterpShort opcode
+  v <- use version
+  case (opcode, opcode `shiftR` 6) of
+    (190, _) | v >= 5 -> zinterpExtended
+    (_, 3) -> zinterpVariable opcode
+    (_, 2) -> zinterpShort opcode
     _ -> zinterpLong opcode
 
 
@@ -60,15 +62,34 @@ zinterpLong opcode = do
 
 zinterpVariable :: Word8 -> Hork ()
 zinterpVariable opcode = do
-  typebyte <- pcGet
-  let args = takeWhile (< 3) $ map (\n -> typebyte `shiftR` n .&. 3) [6, 4, 2, 0]
-  -- TODO: Special handling for je VAR form
+  args <- varArgs opcode
   tell $ "variable form" : map show args
   case (opcode, opcode ^. bitAt 5) of
-    (0xc1, _)  -> zinterpVAR opcode args -- VAR format je, special case
+    (0xc1, _)  -> zinterpVAR (fromIntegral opcode) args -- VAR format je, special case
     (_, False) -> zinterp2OP opcode (head args) (head $ tail args)
-    (_, True)  -> zinterpVAR opcode args
+    (_, True)  -> zinterpVAR (fromIntegral opcode) args
 
+-- TODO: call_vs2 and call_vn2
+
+-- Retrieves the args for variable- and extended-form instructions.
+varArgs :: Word8 -> Hork [Word8]
+varArgs opcode = do
+  v <- use version
+  let shortArgs b = takeWhile (< 3) $ map (\n -> b `shiftR` n .&. 3) [6, 4, 2, 0]
+      longArgs    = do
+        b1 <- pcGet
+        b2 <- pcGet
+        return $ shortArgs b1 ++ shortArgs b2
+  case (v >= 4, v >= 5, opcode) of
+    (True, _, 236) -> longArgs
+    (_, True, 250) -> longArgs
+    _ -> shortArgs <$> pcGet -- retrieve the type byte
+
+zinterpExtended :: Hork ()
+zinterpExtended = do
+  opcode <- pcGet
+  args <- varArgs 0 -- 0 here, not the real opcode, to avoid collision with the special cases
+  zinterpVAR (0xbe00 + fromIntegral opcode) args
 
 
 loadFile :: FilePath -> IO (IOUArray RA Word8)
