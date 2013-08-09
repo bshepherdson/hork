@@ -12,7 +12,7 @@ import Data.Binary.Strict.Get
 import qualified Data.ByteString as B
 
 
-debugging = False
+debugging = True
 
 -- startup flow:
 -- 1) main reads the command line arguments and calls launch (IO)
@@ -95,7 +95,8 @@ restart file = do
   m <- loadFile file
   pc0 <- ra . BA <$> rw_ m hdrPC0
 
-  let st = HorkState m [] pc0 [] file
+  v <- rb_ m hdrVERSION
+  let st = HorkState m [] pc0 [] file v
   result <- runHork st $ forever $ do
               (_, w) <- listen zinterp
               when debugging $ liftIO $ print w
@@ -109,7 +110,7 @@ test :: Show a => Hork a -> IO ()
 test f = do
   m <- loadFile "Zork1.z3"
   pc0 <- ra . BA <$> rw_ m hdrPC0
-  let st = HorkState m [] pc0 [] "Zork1.z3"
+  let st = HorkState m [] pc0 [] "Zork1.z3" 3
 
   result <- runHork st f
   print result

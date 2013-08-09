@@ -18,6 +18,7 @@ module Hork.Core (
 
   locals, oldPC, oldStack,
   mem, stack, pc, routines, storyFile,
+  doVersion, byVersion, pa,
 
   showHex,
 
@@ -79,7 +80,8 @@ data HorkState = HorkState {
   _stack     :: ![Word16],
   _pc        :: !RA,
   _routines  :: ![RoutineState],
-  _storyFile :: !FilePath
+  _storyFile :: !FilePath,
+  _version   :: !Word8
 }
 makeLenses ''HorkState
 
@@ -93,6 +95,31 @@ instance Error Quit where
 
 die :: String -> Hork a
 die = throwError . Die
+
+
+pa :: Word16 -> Hork RA
+pa a = do
+  v <- use version
+  case v of
+    1 -> return . fromIntegral $ 2 * a
+    2 -> return . fromIntegral $ 2 * a
+    3 -> return . fromIntegral $ 2 * a
+    8 -> return . fromIntegral $ 8 * a
+    _ -> return . fromIntegral $ 4 * a
+    -- NB: for versions 6 and 7, need to modify them with R_0 and S_0
+
+
+-- returns the left argument for v3 and lower, right argument for v4 and up
+doVersion :: (a -> Hork b) -> (a -> Hork b) -> a -> Hork b
+doVersion lo hi x = do
+  v <- use version
+  if v <= 3 then lo x else hi x
+
+byVersion :: a -> a -> Hork a
+byVersion lo hi = do
+  v <- use version
+  if v <= 3 then return lo else return hi
+
 
 newtype Hork a = Hork (ErrorT Quit (StateT HorkState (WriterT [String] IO)) a)
   deriving (Functor, Applicative, Monad, MonadState HorkState, MonadWriter [String], MonadIO, MonadError Quit)

@@ -252,7 +252,7 @@ op_1OP_print_addr :: Op1OP
 op_1OP_print_addr = printZ . BA
 
 op_1OP_print_paddr :: Op1OP
-op_1OP_print_paddr = printZ . PA
+op_1OP_print_paddr = printZ <=< pa
 
 
 
@@ -426,7 +426,7 @@ op_VAR_call (routine:args) = do
   pc_ <- use pc
   stack_ <- use stack
 
-  let addr = ra (PA routine)
+  addr <- pa routine
   localCount <- rb addr
   initialValues <- mapM (\i -> rw (addr + 1 + 2 * fromIntegral i)) [0..localCount-1]
   let finalLocals = genericTake localCount $ zipWith combine (map Just args ++ repeat Nothing) (map Just initialValues ++ repeat Nothing)

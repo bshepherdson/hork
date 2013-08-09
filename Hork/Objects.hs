@@ -26,26 +26,36 @@ import Hork.String
 propDefaults :: Hork RA
 propDefaults = ra . BA <$> rw hdrOBJTABLE
 
--- Address of the main table
+-- Address of the main table. Defaults table is 31 words <= v3, 63 words > v3
 objTable :: Hork RA
-objTable = (+62) . ra . BA <$> rw hdrOBJTABLE
+objTable = do
+  v <- byVersion (+62) (+126)
+  v . ra . BA <$> rw hdrOBJTABLE
 
-objEntrySize :: Word32
-objEntrySize = 9 -- v3-specific
+objEntrySize :: Hork Word32
+objEntrySize = byVersion 9 14
 
 -- Address of an entry, given the number.
 objEntry :: Word16 -> Hork RA
 objEntry num = do
   t <- objTable
-  return $ (fromIntegral num - 1) * objEntrySize + t
+  s <- objEntrySize
+  return $ (fromIntegral num - 1) * s + t
 
 
 -- Return the ADDRESS of the relation cell
--- v3-specific
 objParent, objSibling, objChild :: Word16 -> Hork RA
-objParent = entryOffset 4
-objSibling = entryOffset 5
-objChild = entryOffset 6
+objParent  = doVersion (entryOffset 4) (entryOffset 6)
+objSibling = doVersion (entryOffset 5) (entryOffset 8)
+objChild   = doVersion (entryOffset 6) (entryOffset 10)
+
+-- Reads the number of a relative, converting if necessary.
+relativeRead :: RA -> Hork Word16
+relativeRead = doVersion (fmap fromIntegral . rb) rw
+
+-- Writes the number of a relative, converting if necessary.
+relativeWrite :: RA -> Word16 -> Hork ()
+relativeWrite a v = byVersion (\a v -> wb a (fromIntegral v)) ww >>= \f -> f a v
 
 
 entryOffset :: Word32 -> Word16 -> Hork RA
@@ -57,7 +67,8 @@ entryOffset offset num = do
 objPropTableAddr :: Word16 -> Hork RA
 objPropTableAddr num = do
   obj <- objEntry num
-  ra . BA <$> rw (obj + 7)
+  offset <- byVersion 7 12
+  ra . BA <$> rw (obj + offset)
 
 -- Address of the size byte of the given object's first property.
 objFirstProp :: Word16 -> Hork RA
@@ -77,31 +88,51 @@ objPrintShortName :: Word16 -> Hork ()
 objPrintShortName num = objShortNameAddr num >>= printZ
 
 
--- Address of the given property entry's size byte.
+-- Address of the given property entry's size byte, and the size of the property.
 objPropAddr :: Word16 -> Word16 -> Hork RA
 objPropAddr num prop = do
   table <- objFirstProp num
   -- iteratively search for the property
-  propSeek table
- where propSeek a = do
-          sizebyte <- rb a
-          let propnum = sizebyte .&. 31
-              propsize = (sizebyte `shiftR` 5) + 1
-          case () of () | propnum < fromIntegral prop  -> return 0
-                        | propnum == fromIntegral prop -> return a
-                        | otherwise -> propSeek (a + fromIntegral propsize + 1)
+  (a, _, _, _) <- propSeek table prop
+  return a
 
+
+-- Given a property's (first) size byte's address, returns the address, number, length and sizelength of the next property.
+-- Returns (0, 0, undefined, undefined) if the object has no more properties.
+propSeek :: RA -> Word16 -> Hork (RA, Word16, Word8, Word8)
+propSeek a prop = do
+  (propnum, propsize, sizelen) <- propInfo a
+  case () of () | propnum < fromIntegral prop  -> return (0, 0, undefined, undefined)
+                | propnum == fromIntegral prop -> return (a, fromIntegral propnum, propsize, sizelen)
+                | otherwise -> propSeek (a + fromIntegral propsize + fromIntegral sizelen) prop
+
+-- Given a property's (first) size byte's address, returns the address, number, length and sizelength of this property.
+-- Returns (0, 0, undefined, undefined) if the object has no more properties.
+propInfo :: RA -> Hork (Word16, Word8, Word8)
+propInfo a = do
+  sizebyte <- rb a
+  v <- byVersion 3 5
+  case v of
+    3 -> return (fromIntegral $ sizebyte .&. 31, (sizebyte `shiftR` 5) + 1, 1)
+    5 -> do
+      case sizebyte ^. bitAt 7 of
+        True -> do -- bit set, two size-and-number bytes
+          let propnum = sizebyte .&. 63 -- bits 0 to 5
+          byte2 <- rb (a+1)
+          let propsize_ = byte2 .&. 63 -- bits 0 to 5
+              propsize = if propsize_ > 0 then propsize_ else 64
+          return (fromIntegral propnum, propsize, 2)
+        False -> do -- bit clear, one size-and-number byte
+          let propnum = sizebyte .&. 63
+              propsize = if sizebyte ^. bitAt 6 then 2 else 1
+          return (fromIntegral propnum, propsize, 1)
 
 objNextProp :: Word16 -> Word16 -> Hork Word16
 objNextProp obj prop = do
-  nextAddr <- case prop of
-    0 -> objFirstProp obj
-    _ -> do
-      a <- objPropAddr obj prop
-      sizebyte <- rb a
-      return $ a + fromIntegral ((sizebyte `shiftR` 5) + 1)
-  b <- rb nextAddr
-  return $ fromIntegral (b .&. 31)
+  a <- objPropAddr obj prop
+  (_, size, sizelen) <- propInfo a
+  (num, _, _) <- propInfo $ a + fromIntegral size + fromIntegral sizelen
+  return num
 
 
 -- Returns the value of a property, or the default value.
@@ -113,11 +144,10 @@ objPropValue num prop = do
       def <- propDefaults
       rw $ ra . BA $ fromIntegral def + 2 * (prop-1)
     _ -> do
-      sizebyte <- rb a
-      let size = (sizebyte `shiftR` 5) + 1
+      (_, size, sizelen) <- propInfo a
       case size of
-        1 -> fromIntegral <$> rb (a+1)
-        2 -> rw (a+1)
+        1 -> fromIntegral <$> rb (a + fromIntegral sizelen)
+        2 -> rw (a + fromIntegral sizelen)
         _ -> return 0
 
 objPropLen :: Word16 -> Word16 -> Hork Word16
@@ -126,8 +156,8 @@ objPropLen num prop = objPropAddr num prop >>= objPropLenFromAddr
 objPropLenFromAddr :: RA -> Hork Word16
 objPropLenFromAddr a = do
   when (a==0) $ die "Illegal operation: Tried to get_prop_len of a property an object does not have"
-  byte <- rb a
-  return . fromIntegral $ (byte `shiftR` 5) + 1
+  (_, size, _) <- propInfo a
+  return (fromIntegral size)
 
 
 
@@ -136,11 +166,10 @@ objPutProp :: Word16 -> Word16 -> Word16 -> Hork ()
 objPutProp obj prop val = do
   a <- objPropAddr obj prop
   e <- objEntry obj
-  objPrintShortName obj
-  size <- objPropLenFromAddr a
+  (_, size, sizelen) <- propInfo a
   case size of
-    1 -> wb (a+1) (fromIntegral val)
-    2 -> ww (a+1) val
+    1 -> wb (a + fromIntegral sizelen) (fromIntegral val)
+    2 -> ww (a + fromIntegral sizelen) val
     _ -> die "Illegal operation: Tried to put_prop for a property whose length is more than 2"
 
 
@@ -149,27 +178,27 @@ objPutProp obj prop val = do
 objRemove :: Word16 -> Hork ()
 objRemove me = do
   parentAddr <- objParent me
-  parent <- fromIntegral <$> rb parentAddr
-  wb parentAddr 0
+  parent <- relativeRead parentAddr
+  relativeWrite parentAddr 0
   -- go through the sibling chain
-  child <- fromIntegral <$> (rb =<< objChild parent)
+  child <- relativeRead =<< objChild parent
   if child == me
     then do
       a <- objChild parent
       mySiblingAddr <- objSibling me
-      s <- rb mySiblingAddr
-      wb mySiblingAddr 0
-      wb a s -- write the number of my sibling into my parent's child
+      s <- relativeRead mySiblingAddr
+      relativeWrite mySiblingAddr 0
+      relativeWrite a s -- write the number of my sibling into my parent's child
     else do
       sibling <- findMe child
       a <- objSibling sibling
       mySiblingAddr <- objSibling me
-      nextSibling <- rb mySiblingAddr
-      wb a nextSibling
-      wb mySiblingAddr 0
+      nextSibling <- relativeRead mySiblingAddr
+      relativeWrite a nextSibling
+      relativeWrite mySiblingAddr 0
 
  where findMe o = do
-          s <- fromIntegral <$> (rb =<< objSibling o)
+          s <- relativeRead =<< objSibling o
           if s == me
             then return o
             else findMe s
@@ -179,17 +208,17 @@ objRemove me = do
 objInsert :: Word16 -> Word16 -> Hork ()
 objInsert obj dest = do
   parentAddr <- objParent obj
-  p <- fromIntegral <$> rb parentAddr
+  p <- relativeRead parentAddr
   when (p /= 0) $ objRemove obj
 
   -- Get the child of dest, and write obj into that slot.
   childAddr <- objChild dest
-  c <- fromIntegral <$> rb childAddr
-  wb childAddr (fromIntegral obj)
+  c <- relativeRead childAddr
+  relativeWrite childAddr obj
 
   -- finally, write dest's original child into obj's sibling slot
   siblingAddr <- objSibling obj
-  wb siblingAddr c
+  relativeWrite siblingAddr c
 
 
 -- attrs
