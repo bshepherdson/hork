@@ -94,51 +94,61 @@ strRead :: Word16 -> Word16 -> Hork ()
 strRead textbuf_ parsebuf_ = do
   -- TODO: Redisplay the status line here.
   let [textbuf, parsebuf] = map (ra.BA) [textbuf_, parsebuf_]
-  liftIO $ putStrLn $ "Buffers: " ++ showHex textbuf ++ ", " ++ showHex parsebuf
+  --liftIO $ putStrLn $ "Buffers: " ++ showHex textbuf ++ ", " ++ showHex parsebuf
 
   -- read from the keyboard until a CR
   maxlen <- rb textbuf
-  liftIO $ putStrLn $ "Maxlen: " ++ show maxlen
+  --liftIO $ putStrLn $ "Maxlen: " ++ show maxlen
   line <- genericTake maxlen <$> liftIO getLine
   -- write that text to textbuf
-  let line' = map (fromIntegral . ord . toLower) line ++ [0] -- 0 terminator
+  v <- use version
+  let line' = map (fromIntegral . ord . toLower) line ++ (if v >= 5 then [] else [0]) -- 0 terminator only on v < 5
 
-  liftIO $ putStrLn $ line ++ " -> " ++ show line'
-  mapM_ (uncurry wb) (zip [textbuf+1..] line')
+  --liftIO $ putStrLn $ line ++ " -> " ++ show line'
+  v <- use version
+  case v >= 5 of
+    False -> mapM_ (uncurry wb) (zip [textbuf+1..] line')
+    True  -> do
+      mapM_ (uncurry wb) (zip [textbuf+2..] line')
+      wb (textbuf+1) (genericLength line')
 
-  liftIO $ putStrLn "" -- newline
+  --liftIO $ putStrLn "" -- newline
 
-  -- now for lexical analysis
-  -- HACK: assuming the parse-buffer is long enough
-  -- first, retrieve the dictionary word separators (comma, etc.)
-  -- these are in a header of the dictionary
-  dict <- ra . BA <$> rw hdrDICTIONARY
-  sepCount <- rb dict
-  seps <- mapM (rb . (dict+)) [1..fromIntegral sepCount]
-  liftIO $ putStrLn $ "sepCount " ++ show sepCount ++ ", seps = " ++ show seps
+  v <- use version
+  case parsebuf > 0 || v <= 5 of
+    False -> return ()
+    True  -> do
+      -- now for lexical analysis
+      -- HACK: assuming the parse-buffer is long enough
+      -- first, retrieve the dictionary word separators (comma, etc.)
+      -- these are in a header of the dictionary
+      dict <- ra . BA <$> rw hdrDICTIONARY
+      sepCount <- rb dict
+      seps <- mapM (rb . (dict+)) [1..fromIntegral sepCount]
+      --liftIO $ putStrLn $ "sepCount " ++ show sepCount ++ ", seps = " ++ show seps
 
-  -- next, split the text into words, including these separators
-  -- this needs to be done manually D: because we need the position of the first letters
-  let split i (32:rest) [] = split (i+1) rest []
-      split i (32:rest) sofar = (i+1, reverse sofar) : split (i + 1 + length sofar) rest []
-      split _ [] [] = []
-      split i [] sofar = [(i+1, reverse sofar)]
-      split i (c:cs) sofar | c `elem` seps = (if null sofar then id else ((i+1, reverse sofar) :)) ((i + 1 + length sofar, c:[]) : split (i + 2 + length sofar) cs [])
-                           | otherwise = split i cs (c:sofar)
+      -- next, split the text into words, including these separators
+      -- this needs to be done manually D: because we need the position of the first letters
+      let split i (32:rest) [] = split (i+1) rest []
+          split i (32:rest) sofar = (i+1, reverse sofar) : split (i + 1 + length sofar) rest []
+          split _ [] [] = []
+          split i [] sofar = [(i+1, reverse sofar)]
+          split i (c:cs) sofar | c `elem` seps = (if null sofar then id else ((i+1, reverse sofar) :)) ((i + 1 + length sofar, c:[]) : split (i + 2 + length sofar) cs [])
+                               | otherwise = split i cs (c:sofar)
 
-      wds = split 0 (init line') [] -- ignore the 0 terminator
+          wds = split 0 ((if v >= 5 then id else init) line') [] -- ignore the 0 terminator
 
-  liftIO $ print wds
-  parsed <- mapM parse wds
-  liftIO $ print parsed
-  -- we've got the parse data now, so write it into the parse buffer
-  -- first we write the number of words
-  wb (parsebuf + 1) (genericLength parsed)
-  mapM_ (\(target, (pos, word, addr)) -> do
-      ww target (fromIntegral addr)
-      wb (target+2) (genericLength word)
-      wb (target+3) (fromIntegral pos)
-    ) (zip [parsebuf + 2, parsebuf + 6 ..] parsed)
+      --liftIO $ print wds
+      parsed <- mapM parse wds
+      --liftIO $ print parsed
+      -- we've got the parse data now, so write it into the parse buffer
+      -- first we write the number of words
+      wb (parsebuf + 1) (genericLength parsed)
+      mapM_ (\(target, (pos, word, addr)) -> do
+          ww target (fromIntegral addr)
+          wb (target+2) (genericLength word)
+          wb (target+3) (fromIntegral pos)
+        ) (zip [parsebuf + 2, parsebuf + 6 ..] parsed)
 
 
 
@@ -152,27 +162,28 @@ parse (pos, word) = do
 
 
 dictSearch :: [Word16] -> Hork RA
-dictSearch [a,b] = do
+dictSearch word = do
   dict <- ra . BA <$> rw hdrDICTIONARY
   sepCount <- fromIntegral <$> rb dict
   entrySize <- rb (dict + sepCount + 1)
   entryCount <- rw (dict + sepCount + 2)
-  let top = dict + sepCount + 4
+  case entryCount > 0 of
+    False -> return 0
+    True  -> do
+      --liftIO $ putStrLn $ "entrySize = " ++ show entrySize ++ ", entryCount = " ++ show entryCount
+      let top = dict + sepCount + 4
 
-  match <- take 1 . concat <$> (forM [top, top + fromIntegral entrySize .. top + fromIntegral entrySize * fromIntegral (entryCount-1)] $ \e -> do
-    ea <- rw e
-    case ea == a of
-      False -> return []
-      True  -> do
-        eb <- rw (e+2)
-        case eb == b of
+      match <- take 1 . concat <$> (forM [top, top + fromIntegral entrySize .. top + fromIntegral entrySize * fromIntegral (entryCount-1)] $ \e -> do
+        --liftIO $ putStrLn $ "About to read " ++ unwords (map showHex [e, e+2, e+4])
+        entryWord <- mapM rw [e, e+2, e+4]
+        case and (zipWith (==) entryWord word) of
           False -> return []
           True  -> return [e]
-    )
+        )
 
-  case match of
-    []  -> return 0
-    [m] -> return (m+4)
+      case match of
+        []  -> return 0
+        [m] -> return (m + 2 * genericLength word)
 
 
 -- encodes a word into dictionary format: 6 or 9 Z-characters (2 or 3 words) and pads out with 5s.

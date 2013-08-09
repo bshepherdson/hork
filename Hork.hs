@@ -12,7 +12,7 @@ import Data.Binary.Strict.Get
 import qualified Data.ByteString as B
 
 
-debugging = True
+debugging = False
 
 -- startup flow:
 -- 1) main reads the command line arguments and calls launch (IO)

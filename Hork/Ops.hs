@@ -1,5 +1,5 @@
 module Hork.Ops (
-  zinterp0OP, zinterp1OP, zinterp2OP, zinterpVAR
+  zinterp0OP, zinterp1OP, zinterp2OP, zinterpVAR, div', mod'
 ) where
 
 import qualified Data.Map as M
@@ -431,8 +431,28 @@ op_2OP_add, op_2OP_sub, op_2OP_mul, op_2OP_div, op_2OP_mod :: Op2OP
 op_2OP_add = math (+)
 op_2OP_sub = math (flip subtract)
 op_2OP_mul = math (*)
-op_2OP_div = math div
-op_2OP_mod = math mod
+op_2OP_div = math div'
+op_2OP_mod = math mod'
+
+-- Signed division is busted relative to what the Z-machine expects.
+-- These functions fix things.
+div' :: Int16 -> Int16 -> Int16
+div' _ 0 = error "Division by 0"
+div' a b = div'' a b
+  where aPos = a >= 0
+        bPos = b > 0
+        div'' a b | aPos == bPos = div a b
+                  | otherwise = truncate (fromIntegral a / fromIntegral b)
+
+mod' :: Int16 -> Int16 -> Int16
+mod' _ 0 = error "Division by 0"
+mod' a b = mod'' a b
+  where aPos = a >= 0
+        bPos = b > 0
+        mod'' a b | aPos == bPos = mod a b
+                  | otherwise = let dbl = fromIntegral a / fromIntegral b
+                                    int = truncate dbl
+                                in  truncate $ fromIntegral b * (dbl - fromIntegral int)
 
 
 op_2OP_call :: Bool -> Op2OP
@@ -515,12 +535,18 @@ zcall store (routine:args) = do
 
   addr <- pa routine
   localCount <- rb addr
-  initialValues <- mapM (\i -> rw (addr + 1 + 2 * fromIntegral i)) [0..localCount-1]
+  hasDefaultLocals <- (< 5) <$> use version
+  initialValues <- case hasDefaultLocals of
+    False -> return $ genericTake localCount $ repeat 0
+    True  -> mapM (\i -> rw (addr + 1 + 2 * fromIntegral i)) [0..localCount-1]
   let finalLocals = genericTake localCount $ zipWith combine (map Just args ++ repeat Nothing) (map Just initialValues ++ repeat Nothing)
       routState = RoutineState finalLocals pc_ stack_ store
+  tell $ ["addr = " ++ showHex addr ++ ", localCount = " ++ show localCount ++ ", locals = " ++ show finalLocals ++ ", hasDefaultLocals = " ++ show hasDefaultLocals]
   stack .= []
   routines %= (routState:)
-  pc .= addr + 1 + 2 * fromIntegral localCount
+  let newPC = addr + 1 + if hasDefaultLocals then 2 * fromIntegral localCount else 0
+  pc .= newPC
+  tell $ ["new PC = " ++ showHex newPC]
  where combine Nothing Nothing  = undefined -- can't happen
        combine Nothing (Just y) = y
        combine (Just x) _       = x
@@ -543,6 +569,7 @@ op_VAR_put_prop _ = illegalArgument "put_prop without 3 args"
 
 -- TODO: Implement the timeouts.
 op_VAR_read :: OpVAR
+op_VAR_read [text] = op_VAR_read [text, 0]
 op_VAR_read (text:parse:_) = do
   strRead text parse
   v <- use version
@@ -556,7 +583,7 @@ op_VAR_print_char _ = illegalArgument "print_char without 1 arg"
 
 
 op_VAR_print_num :: OpVAR
-op_VAR_print_num [n] = liftIO $ print (toInt n)
+op_VAR_print_num [n] = liftIO $ putStr $ show (toInt n)
 op_VAR_print_num _ = illegalArgument "print_num without 1 arg"
 
 
