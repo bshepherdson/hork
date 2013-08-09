@@ -53,6 +53,7 @@ charMunge f c rest | c >= 6 = (fromIntegral (f c) :) <$> mungeStrZ rest
                    | otherwise = mungeStrZ (c:rest)
 
 -- Maps characters for A2.
+-- TODO: v5 potentially uses a new A2 specified in the header.
 a2 :: Word16 -> Word16
 a2 n = head $ genericDrop (n-7) (map (fromIntegral . ord) a2Chars)
 
@@ -143,7 +144,8 @@ strRead textbuf_ parsebuf_ = do
 
 parse :: (Int, [Word8]) -> Hork (Int, [Word8], RA)
 parse (pos, word) = do
-  let encoded = encode word
+  v <- byVersion 6 9
+  let encoded = encode v word
   -- now search in the dictionary for the same word.
   addr <- dictSearch encoded
   return (pos, word, addr)
@@ -173,13 +175,16 @@ dictSearch [a,b] = do
     [m] -> return (m+4)
 
 
--- encodes a word into dictionary format: 6 Z-characters (2 words) and pads out with 5s.
-encode :: [Word8] -> [Word16]
-encode cs = collect (take 3 chars) : (collect (drop 3 chars) + bit 15) : []
+-- encodes a word into dictionary format: 6 or 9 Z-characters (2 or 3 words) and pads out with 5s.
+-- The first parameter is the number of characters to take.
+encode :: Int -> [Word8] -> [Word16]
+encode v cs = reverse . (\(x:xs) -> x + bit 15 : xs) . reverse . map collect . chunksOf 3 $ chars
   where chars :: [Word8]
-        chars = take 6 . (++ repeat 5) . concatMap encodeChar $ cs
+        chars = take v . (++ repeat 5) . concatMap encodeChar $ cs
         collect :: [Word8] -> Word16
         collect [a,b,c] = (0 :: Word16) .|. fromIntegral c .|. (fromIntegral b `shiftL` 5) .|. (fromIntegral a `shiftL` 10)
+        chunksOf _ [] = []
+        chunksOf n xs = hs : chunksOf n ts where (hs, ts) = splitAt n xs
         encodeChar 32 = [0]
         encodeChar c | 97 <= c && c <= 122 = [c - 91]
                      | otherwise = case elemIndex (chr (fromIntegral c)) a2Chars of
