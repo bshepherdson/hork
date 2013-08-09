@@ -102,11 +102,11 @@ pa :: Word16 -> Hork RA
 pa a = do
   v <- use version
   case v of
-    1 -> return . fromIntegral $ 2 * a
-    2 -> return . fromIntegral $ 2 * a
-    3 -> return . fromIntegral $ 2 * a
-    8 -> return . fromIntegral $ 8 * a
-    _ -> return . fromIntegral $ 4 * a
+    1 -> return . (2*) . fromIntegral $ a
+    2 -> return . (2*) . fromIntegral $ a
+    3 -> return . (2*) . fromIntegral $ a
+    8 -> return . (8*) . fromIntegral $ a
+    _ -> return . (4*) . fromIntegral $ a
     -- NB: for versions 6 and 7, need to modify them with R_0 and S_0
 
 
