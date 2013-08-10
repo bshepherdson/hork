@@ -97,6 +97,11 @@ objPropAddr num prop = do
   (a, _, _, _) <- propSeek table prop
   return a
 
+objPropAddrData :: Word16 -> Word16 -> Hork RA
+objPropAddrData num prop = do
+  a <- objPropAddr num prop -- address of the size byte
+  (_, _, sizelen) <- propInfo a
+  return $ a + fromIntegral sizelen
 
 -- Given a property's (first) size byte's address, returns the address, number, length and sizelength of the next property.
 -- Returns (0, 0, undefined, undefined) if the object has no more properties.
@@ -108,8 +113,8 @@ propSeek a prop = do
                 | propnum == fromIntegral prop -> return (a, fromIntegral propnum, propsize, sizelen)
                 | otherwise -> propSeek (a + fromIntegral propsize + fromIntegral sizelen) prop
 
--- Given a property's (first) size byte's address, returns the address, number, length and sizelength of this property.
--- Returns (0, 0, undefined, undefined) if the object has no more properties.
+-- Given a property's (first) size byte's address, returns the number, length and sizelength of this property.
+-- Returns (0, undefined, undefined) if the object has no more properties.
 propInfo :: RA -> Hork (Word16, Word8, Word8)
 propInfo a = do
   sizebyte <- rb a
@@ -159,11 +164,14 @@ objPropLenFromAddr a = do
   when (a==0) $ die "Illegal operation: Tried to get_prop_len of a property an object does not have"
   v <- use version
   b <- rb (a-1)
+  tell ["a = " ++ showHex a]
+  tell ["sizebyte = " ++ showHex b]
   let size = if v <= 3
                then b `shiftR` 5
                else if b .&. 128 > 0
                  then b .&. 63
                  else if b ^. bitAt 6 then 2 else 1
+  tell ["size = " ++ show size]
   return (fromIntegral size)
 
 

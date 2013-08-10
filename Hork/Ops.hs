@@ -420,7 +420,7 @@ op_2OP_get_prop :: Op2OP
 op_2OP_get_prop obj prop = objPropValue obj prop >>= zstore
 
 op_2OP_get_prop_addr :: Op2OP
-op_2OP_get_prop_addr obj prop = objPropAddr obj prop >>= return . fromIntegral >>= zstore
+op_2OP_get_prop_addr obj prop = objPropAddrData obj prop >>= return . fromIntegral >>= zstore
 
 op_2OP_get_next_prop :: Op2OP
 op_2OP_get_next_prop obj prop = objNextProp obj prop >>= zstore
