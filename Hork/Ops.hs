@@ -301,6 +301,7 @@ op_1OP_jump uArg = pcBumpBy (toInt uArg - 2) -- Have to adjust by -2 like for br
 
 
 op_1OP_load :: Op1OP
+op_1OP_load 0 = use stack >>= return . head >>= zstore
 op_1OP_load arg = getVar (fromIntegral arg) >>= zstore
 
 
@@ -398,6 +399,7 @@ op_2OP_clear_attr = clearAttr
 
 
 op_2OP_store :: Op2OP
+op_2OP_store 0 val = pop >> push val
 op_2OP_store var val = setVar (fromIntegral var) val
 
 
@@ -540,7 +542,7 @@ zcall store (routine:args) = do
     False -> return $ genericTake localCount $ repeat 0
     True  -> mapM (\i -> rw (addr + 1 + 2 * fromIntegral i)) [0..localCount-1]
   let finalLocals = genericTake localCount $ zipWith combine (map Just args ++ repeat Nothing) (map Just initialValues ++ repeat Nothing)
-      routState = RoutineState finalLocals pc_ stack_ store
+      routState = RoutineState (genericLength args) finalLocals pc_ stack_ store
   tell $ ["addr = " ++ showHex addr ++ ", localCount = " ++ show localCount ++ ", locals = " ++ show finalLocals ++ ", hasDefaultLocals = " ++ show hasDefaultLocals]
   stack .= []
   routines %= (routState:)
@@ -634,7 +636,7 @@ op_VAR_get_cursor _ = notImplemented "get_cursor"
 
 
 op_VAR_set_text_style :: OpVAR
-op_VAR_set_text_style _ = notImplemented "set_text_style"
+op_VAR_set_text_style _ = liftIO . putStrLn $ "[Unimplemented instruction: set_text_style]"
 
 
 op_VAR_buffer_mode :: OpVAR
@@ -668,8 +670,11 @@ op_VAR_not :: OpVAR
 op_VAR_not _ = notImplemented "not"
 
 
+-- TODO: Handle the third and fourth arguments
 op_VAR_tokenise :: OpVAR
-op_VAR_tokenise _ = notImplemented "tokenise"
+op_VAR_tokenise [text] = op_VAR_tokenise [text, 0]
+op_VAR_tokenise [text,parse] = strRead text parse
+op_VAR_tokenise _ = illegalArgument "tokenise without 1 or 2 arguments"
 
 
 op_VAR_encode_text :: OpVAR
@@ -685,7 +690,10 @@ op_VAR_print_table _ = notImplemented "print_table"
 
 
 op_VAR_check_arg_count :: OpVAR
-op_VAR_check_arg_count _ = notImplemented "check_arg_count"
+op_VAR_check_arg_count [n] = do
+  rs <- head <$> use routines
+  let c = rs ^. argCount
+  zbranch (n <= c)
 
 
 op_EXT_save :: OpVAR
@@ -709,7 +717,9 @@ op_EXT_set_font _ = notImplemented "set_font"
 
 
 op_EXT_save_undo :: OpVAR
-op_EXT_save_undo _ = notImplemented "save_undo"
+op_EXT_save_undo _ = do
+  liftIO . putStrLn $ "[Unimplemented opcode: save_undo]"
+  zstore 0xffff
 
 
 op_EXT_restore_undo :: OpVAR

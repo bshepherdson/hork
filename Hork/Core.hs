@@ -16,7 +16,7 @@ module Hork.Core (
   getVar, setVar,
   getArg,
 
-  locals, oldPC, oldStack, doStore,
+  argCount, locals, oldPC, oldStack, doStore,
   mem, stack, pc, routines, storyFile, version,
   doVersion, byVersion, pa,
 
@@ -68,6 +68,7 @@ import Data.List.Lens
 -- A stack of these is maintained in the main state, it holds the information necessary to
 -- return from a routine call.
 data RoutineState = RoutineState {
+  _argCount  :: Word16,
   _locals    :: ![Word16],
   _oldPC     :: !RA,
   _oldStack  :: ![Word16],

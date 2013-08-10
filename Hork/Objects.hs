@@ -91,6 +91,7 @@ objPrintShortName num = objShortNameAddr num >>= printZ
 -- Address of the given property entry's size byte, and the size of the property.
 objPropAddr :: Word16 -> Word16 -> Hork RA
 objPropAddr num prop = do
+  tell ["objPropAddr: " ++ show num ++ ", " ++ show prop]
   table <- objFirstProp num
   -- iteratively search for the property
   (a, _, _, _) <- propSeek table prop
@@ -102,6 +103,7 @@ objPropAddr num prop = do
 propSeek :: RA -> Word16 -> Hork (RA, Word16, Word8, Word8)
 propSeek a prop = do
   (propnum, propsize, sizelen) <- propInfo a
+  tell ["propSeek: " ++ show prop ++ ", " ++ show propnum ++ ", " ++ show propsize ++ ", " ++ show sizelen]
   case () of () | propnum < fromIntegral prop  -> return (0, 0, undefined, undefined)
                 | propnum == fromIntegral prop -> return (a, fromIntegral propnum, propsize, sizelen)
                 | otherwise -> propSeek (a + fromIntegral propsize + fromIntegral sizelen) prop
@@ -150,13 +152,18 @@ objPropValue num prop = do
         2 -> rw (a + fromIntegral sizelen)
         _ -> return 0
 
-objPropLen :: Word16 -> Word16 -> Hork Word16
-objPropLen num prop = objPropAddr num prop >>= objPropLenFromAddr
-
+-- Expects to be given the address of the FIRST DATA BYTE.
+-- Examines previous bytes to determine the size.
 objPropLenFromAddr :: RA -> Hork Word16
 objPropLenFromAddr a = do
   when (a==0) $ die "Illegal operation: Tried to get_prop_len of a property an object does not have"
-  (_, size, _) <- propInfo a
+  v <- use version
+  b <- rb (a-1)
+  let size = if v <= 3
+               then b `shiftR` 5
+               else if b .&. 128 > 0
+                 then b .&. 63
+                 else if b ^. bitAt 6 then 2 else 1
   return (fromIntegral size)
 
 
