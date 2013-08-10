@@ -100,8 +100,11 @@ objPropAddr num prop = do
 objPropAddrData :: Word16 -> Word16 -> Hork RA
 objPropAddrData num prop = do
   a <- objPropAddr num prop -- address of the size byte
-  (_, _, sizelen) <- propInfo a
-  return $ a + fromIntegral sizelen
+  case a of
+    0 -> return 0
+    _ -> do
+      (_, _, sizelen) <- propInfo a
+      return $ a + fromIntegral sizelen
 
 -- Given a property's (first) size byte's address, returns the address, number, length and sizelength of the next property.
 -- Returns (0, 0, undefined, undefined) if the object has no more properties.

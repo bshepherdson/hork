@@ -147,7 +147,7 @@ op_0OP_print = do
 
 op_0OP_print_ret :: Op0OP
 op_0OP_print_ret = do
-  op_0OP_print_ret
+  op_0OP_print
   zreturn 1
 
 op_0OP_nop :: Op0OP
