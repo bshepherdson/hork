@@ -61,7 +61,19 @@ relativeWrite a v = byVersion (\a v -> wb a (fromIntegral v)) ww >>= \f -> f a v
 entryOffset :: Word32 -> Word16 -> Hork RA
 entryOffset offset num = do
   obj <- objEntry num
+
+  msg <- showObj num
+  tell [msg]
   return (obj + offset)
+
+
+
+showObj :: Word16 -> Hork String
+showObj num = do
+  obj <- objEntry num
+  entry <- mapM rb [obj..obj+14]
+  return $ "object " ++ show num ++ ": " ++ show entry
+
 
 -- Address of the length byte for the object's short name, at the beginning of its property table.
 objPropTableAddr :: Word16 -> Hork RA
@@ -90,6 +102,7 @@ objPrintShortName num = objShortNameAddr num >>= printZ
 
 -- Address of the given property entry's size byte, and the size of the property.
 objPropAddr :: Word16 -> Word16 -> Hork RA
+objPropAddr _ 0 = return 0
 objPropAddr num prop = do
   tell ["objPropAddr: " ++ show num ++ ", " ++ show prop]
   table <- objFirstProp num
@@ -140,9 +153,14 @@ propInfo a = do
 objNextProp :: Word16 -> Word16 -> Hork Word16
 objNextProp obj prop = do
   a <- objPropAddr obj prop
-  (_, size, sizelen) <- propInfo a
-  (num, _, _) <- propInfo $ a + fromIntegral size + fromIntegral sizelen
-  return num
+  case a of
+    0 -> do
+      f <- objFirstProp obj
+      objPropNumber f
+    _ -> do
+      (_, size, sizelen) <- propInfo a
+      (num, _, _) <- propInfo $ a + fromIntegral size + fromIntegral sizelen
+      return num
 
 
 -- Returns the value of a property, or the default value.
@@ -160,6 +178,14 @@ objPropValue num prop = do
         2 -> rw (a + fromIntegral sizelen)
         _ -> return 0
 
+-- Given the address of the (first) size byte, returns the property number.
+objPropNumber :: RA -> Hork Word16
+objPropNumber a = do
+  v <- use version
+  b <- rb a
+  let num = if v <= 3 then b .&. 31 else b .&. 63
+  return $ fromIntegral num
+
 -- Expects to be given the address of the FIRST DATA BYTE.
 -- Examines previous bytes to determine the size.
 objPropLenFromAddr :: RA -> Hork Word16
@@ -170,7 +196,7 @@ objPropLenFromAddr a = do
   tell ["a = " ++ showHex a]
   tell ["sizebyte = " ++ showHex b]
   let size = if v <= 3
-               then b `shiftR` 5
+               then (b `shiftR` 5) + 1
                else if b .&. 128 > 0
                  then b .&. 63
                  else if b ^. bitAt 6 then 2 else 1
@@ -192,7 +218,6 @@ objPutProp obj prop val = do
 
 
 -- Removes an object from the tree, so it has parent 0. It keeps its children.
--- v3-specific: using bytes, not words, for the relative pointers
 objRemove :: Word16 -> Hork ()
 objRemove me = do
   parentAddr <- objParent me
@@ -222,12 +247,13 @@ objRemove me = do
             else findMe s
 
 
--- v3-specific, bytes for relatives
 objInsert :: Word16 -> Word16 -> Hork ()
 objInsert obj dest = do
   parentAddr <- objParent obj
   p <- relativeRead parentAddr
   when (p /= 0) $ objRemove obj
+
+  relativeWrite parentAddr dest
 
   -- Get the child of dest, and write obj into that slot.
   childAddr <- objChild dest
@@ -237,6 +263,9 @@ objInsert obj dest = do
   -- finally, write dest's original child into obj's sibling slot
   siblingAddr <- objSibling obj
   relativeWrite siblingAddr c
+  objMsg <- showObj obj
+  destMsg <- showObj dest
+  tell ["objInsert complete", "obj: " ++ objMsg, "dest: " ++ destMsg]
 
 
 -- attrs

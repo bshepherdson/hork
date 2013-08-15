@@ -239,7 +239,7 @@ op_1OP_jz arg = zbranch (arg == 0)
 op_1OP_get_sibling :: Op1OP
 op_1OP_get_sibling obj = do
   a <- objSibling obj
-  sib <- fromIntegral <$> rb a
+  sib <- relativeRead a
   zstore sib
   zbranch (sib > 0)
 
@@ -247,12 +247,12 @@ op_1OP_get_sibling obj = do
 op_1OP_get_child :: Op1OP
 op_1OP_get_child obj = do
   a <- objChild obj
-  c <- fromIntegral <$> rb a
+  c <- relativeRead a
   zstore c
   zbranch (c > 0)
 
 op_1OP_get_parent :: Op1OP
-op_1OP_get_parent = objParent >=> rb >=> return . fromIntegral >=> zstore
+op_1OP_get_parent = objParent >=> relativeRead >=> return . fromIntegral >=> zstore
 
 op_1OP_get_prop_len :: Op1OP
 op_1OP_get_prop_len arg = objPropLenFromAddr (ra (BA arg)) >>= zstore
@@ -373,7 +373,7 @@ op_2OP_dec_chk var val = do
 
 op_2OP_jin :: Op2OP
 op_2OP_jin child parent = do
-  p <- fromIntegral <$> (rb =<< objParent child) -- v3-specific
+  p <- objParent child >>= relativeRead
   zbranch (p == parent)
 
 
