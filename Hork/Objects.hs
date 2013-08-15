@@ -71,7 +71,7 @@ entryOffset offset num = do
 showObj :: Word16 -> Hork String
 showObj num = do
   obj <- objEntry num
-  entry <- mapM rb [obj..obj+14]
+  entry <- mapM rb [obj..obj+13]
   return $ "object " ++ show num ++ ": " ++ show entry
 
 
@@ -156,7 +156,8 @@ objNextProp obj prop = do
   case a of
     0 -> do
       f <- objFirstProp obj
-      objPropNumber f
+      (n, _, _) <- propInfo f
+      return n
     _ -> do
       (_, size, sizelen) <- propInfo a
       (num, _, _) <- propInfo $ a + fromIntegral size + fromIntegral sizelen
@@ -177,14 +178,6 @@ objPropValue num prop = do
         1 -> fromIntegral <$> rb (a + fromIntegral sizelen)
         2 -> rw (a + fromIntegral sizelen)
         _ -> return 0
-
--- Given the address of the (first) size byte, returns the property number.
-objPropNumber :: RA -> Hork Word16
-objPropNumber a = do
-  v <- use version
-  b <- rb a
-  let num = if v <= 3 then b .&. 31 else b .&. 63
-  return $ fromIntegral num
 
 -- Expects to be given the address of the FIRST DATA BYTE.
 -- Examines previous bytes to determine the size.
@@ -273,7 +266,7 @@ objInsert obj dest = do
 -- Given: modifier function, object number, attr number, returns the new value
 handleAttr :: (Bool -> Bool) -> Word16 -> Word16 -> Hork Bool
 handleAttr f obj attr = do
-  a <- entryOffset (fromIntegral attr `shiftR` 8) obj
+  a <- entryOffset (fromIntegral attr `shiftR` 3) obj
   b <- rb a
   let bit = fromIntegral $ 7 - (attr .&. 7)
       val = b ^. bitAt bit
