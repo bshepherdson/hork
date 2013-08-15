@@ -1,12 +1,11 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, NoMonomorphismRestriction, BangPatterns, TemplateHaskell, OverloadedStrings #-}
-module Main where
+module Hork where
 
 import Hork.Core
 import Hork.String
 import Hork.Ops
 
 import System.IO
-import System.Environment (getArgs)
 
 import Data.Binary.Strict.Get
 import qualified Data.ByteString as B
@@ -135,9 +134,4 @@ test f = do
 
   result <- runHork st f
   print result
-
-main = do
-  hSetBuffering stdout NoBuffering
-  [file] <- getArgs
-  restart file
 

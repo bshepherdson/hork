@@ -16,6 +16,6 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 executable hork
-  main-is:             Hork.hs
-  other-modules:       Hork.Mem, Hork.Header, Hork.Core, Hork.String, Hork.Objects, Hork.Ops
-  build-depends:       base ==4.6.*, lens, mtl, array, binary-strict, bytestring, containers, random
+  main-is:             Main.hs
+  other-modules:       Hork, Hork.Mem, Hork.Header, Hork.Core, Hork.String, Hork.Objects, Hork.Ops
+  build-depends:       base ==4.6.*, lens, mtl, array, binary-strict, bytestring, containers, random, HUnit==1.2.*
