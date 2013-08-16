@@ -183,7 +183,7 @@ dictSearch word = do
 
       case match of
         []  -> return 0
-        [m] -> return (m + 2 * genericLength word)
+        [m] -> return m
 
 
 -- encodes a word into dictionary format: 6 or 9 Z-characters (2 or 3 words) and pads out with 5s.

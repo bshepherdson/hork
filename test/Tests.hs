@@ -5,8 +5,10 @@ import Test.HUnit
 import Hork
 import Hork.Core hiding (children)
 import Hork.Objects
+import Hork.String
+import Hork.Mem
 
-import Data.Char (ord)
+import Data.Char (ord, chr)
 
 
 ztest :: Hork a -> Test
@@ -20,7 +22,8 @@ ztest f = TestCase $ do
 
 
 allTests = TestList [
-  TestLabel "objects" objectTests
+  TestLabel "objects" objectTests,
+  TestLabel "strings" stringTests
   ]
 
 
@@ -217,5 +220,74 @@ siblings obj = do
   case s of
     0 -> return []
     _ -> fmap (s :) $ siblings s
+
+
+stringTests = TestList [
+  TestLabel "Reading strings" $ ztest $ do
+    let check :: (RA, Int, String) -> Hork ()
+        check (a,exLen,exStr) = do
+          (s, len) <- strLenZ a
+          liftIO $ assertEqual ("string length (0x" ++ showHex a ++ ")") exLen len
+          liftIO $ assertEqual ("string content (0x" ++ showHex a ++ ")") exStr (map (chr.fromIntegral) s)
+    mapM_ check [(0x14890, 22, "A quick thrust pinks your left arm, and blood starts to trickle down."),
+                 (0x134fc, 14, "Very good. Now you can go to the second grade."),
+                 (0x13076, 11, "Nice view, lousy place to jump.")
+                ]
+  ,
+
+  TestLabel "encoding words" $ TestCase $ do
+    let x = encode 6 (map (fromIntegral.ord) "kiss")
+    assertEqual "encoding 'kiss'" [0x41d8, 0xe0a5] x
+
+    let y = encode 9 (map (fromIntegral.ord) "facestabbing")
+    assertEqual "encoding 'facestabbing'" [0x2cc8, 0x2b19, 0x98e7] y
+  ,
+
+  TestLabel "dictionary lookup" $ ztest $ do
+    -- look up the word "kiss" in the dictionary, 0x41d8 e0a5, at 0x4416
+    loc <- dictSearch [0x41d8, 0xe0a5]
+    liftIO $ assertEqual "data address of 'kiss'" 0x4416 loc
+  ,
+
+  TestLabel "parsing" $ ztest $ do
+    (pos, word, addr) <- parse (0, map (fromIntegral.ord) "kiss")
+    liftIO $ assertEqual "parse position" 0 pos
+    liftIO $ assertEqual "parse address" 0x4416 addr
+  ,
+
+  TestLabel "Reading dictionary" $ ztest $ do
+    let textbuf = 0x2271 :: RA
+        parsebuf = 0x2300 :: RA
+    wb textbuf 9
+    zipWithM_ wb [0x2272 :: RA ..] $ map (fromIntegral.ord) "kiss"
+    wb (0x2276::RA) 0
+    wb parsebuf 8
+
+    strRead (fromIntegral textbuf) (fromIntegral parsebuf)
+    -- parse buffer: number of words in byte 1.
+    -- parse record (byte 2): ba of word in dictionary, length, position
+    numWords <- rb (parsebuf+1)
+    liftIO $ assertEqual "Parse buffer word count" 1 numWords
+    addr <- rw (parsebuf+2)
+    liftIO $ assertEqual "Parsed word address" 0x4419 addr
+    len <- rb (parsebuf+4)
+    liftIO $ assertEqual "Parsed word length" 4 len
+    pos <- rb (parsebuf+5)
+    liftIO $ assertEqual "Parsed word position" 0 pos
+  ]
+
+  {-
+  41d8
+  0100 0001 1101 1000
+  0 10000 01110 11000
+    k     i     s
+
+  e0a5
+  1110 0000 1010 0101
+  1 10000 00101 00101
+    s     -     -
+
+  data bytes are 41 ba 00 and their address is 0x4416
+  -}
 
 
