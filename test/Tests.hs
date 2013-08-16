@@ -253,6 +253,8 @@ stringTests = TestList [
     (pos, word, addr) <- parse (0, map (fromIntegral.ord) "kiss")
     liftIO $ assertEqual "parse position" 0 pos
     liftIO $ assertEqual "parse address" 0x4416 addr
+
+  {-
   ,
 
   TestLabel "Reading dictionary" $ ztest $ do
@@ -274,20 +276,7 @@ stringTests = TestList [
     liftIO $ assertEqual "Parsed word length" 4 len
     pos <- rb (parsebuf+5)
     liftIO $ assertEqual "Parsed word position" 0 pos
-  ]
-
-  {-
-  41d8
-  0100 0001 1101 1000
-  0 10000 01110 11000
-    k     i     s
-
-  e0a5
-  1110 0000 1010 0101
-  1 10000 00101 00101
-    s     -     -
-
-  data bytes are 41 ba 00 and their address is 0x4416
   -}
+  ]
 
 
