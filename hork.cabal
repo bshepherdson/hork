@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                hork
-version:             0.1.0
+version:             0.2.0
 synopsis:            Z-machine interpreter
 -- description:         
 homepage:            https://github.com/shepheb/hork
@@ -17,5 +17,21 @@ cabal-version:       >=1.8
 
 executable hork
   main-is:             Main.hs
-  other-modules:       Hork, Hork.Mem, Hork.Header, Hork.Core, Hork.String, Hork.Objects, Hork.Ops
-  build-depends:       base ==4.6.*, lens, mtl, array, binary-strict, bytestring, containers, random, HUnit==1.2.*
+
+  other-modules:       Hork,
+                       Hork.Mem,
+                       Hork.Header,
+                       Hork.Core,
+                       Hork.String,
+                       Hork.Objects,
+                       Hork.Ops
+
+  build-depends:       base >=4.7,
+                       lens,
+                       mtl,
+                       array,
+                       bytestring,
+                       containers,
+                       random,
+                       HUnit==1.2.*
+

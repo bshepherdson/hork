@@ -7,7 +7,6 @@ import Hork.Ops
 
 import System.IO
 
-import Data.Binary.Strict.Get
 import qualified Data.ByteString as B
 
 
@@ -94,20 +93,8 @@ zinterpExtended = do
 loadFile :: FilePath -> IO (IOUArray RA Word8)
 loadFile file = do
   -- read the file into a [Word8]
-  h <- openFile file ReadMode
-  size <- hFileSize h
-  input <- B.hGetContents h
-  let fileReader = do
-        done <- isEmpty
-        case done of
-          True  -> return []
-          False -> (:) <$> getWord8 <*> fileReader
-
-  let bytes = case runGet fileReader input of
-        (Left err, _) -> error $ "File loading error: " ++ err
-        (Right bs, _) -> bs
-
-  newListArray (0, fromIntegral size - 1) bytes
+  b <- B.readFile file
+  newListArray (0, fromIntegral $ B.length b - 1) (B.unpack b)
 
 
 restart :: FilePath -> IO ()
