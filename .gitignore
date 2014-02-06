@@ -1,5 +1,6 @@
 .*.swp
 *.o
+*.js_o
+*.js_hi
 *.hi
 dist/*
-cabal-dev/*
