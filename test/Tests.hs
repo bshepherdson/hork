@@ -1,4 +1,4 @@
-module Tests where
+module Main where
 
 import Test.HUnit
 
@@ -20,6 +20,7 @@ ztest f = TestCase $ do
   _ <- runHork st f
   return ()
 
+main = runTestTT allTests
 
 allTests = TestList [
   TestLabel "objects" objectTests,
@@ -246,13 +247,13 @@ stringTests = TestList [
   TestLabel "dictionary lookup" $ ztest $ do
     -- look up the word "kiss" in the dictionary, 0x41d8 e0a5, at 0x4416
     loc <- dictSearch [0x41d8, 0xe0a5]
-    liftIO $ assertEqual "data address of 'kiss'" 0x4416 loc
+    liftIO $ assertEqual "data address of 'kiss'" 0x4412 loc
   ,
 
   TestLabel "parsing" $ ztest $ do
     (pos, word, addr) <- parse (0, map (fromIntegral.ord) "kiss")
     liftIO $ assertEqual "parse position" 0 pos
-    liftIO $ assertEqual "parse address" 0x4416 addr
+    liftIO $ assertEqual "parse address" 0x4412 addr
 
   {-
   ,
