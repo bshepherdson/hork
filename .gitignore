@@ -3,4 +3,6 @@
 *.js_o
 *.js_hi
 *.hi
+*.dyn_hi
+*.dyn_o
 dist/*
