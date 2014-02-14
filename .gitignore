@@ -5,4 +5,5 @@
 *.hi
 *.dyn_hi
 *.dyn_o
+*.jsexe/*
 dist/*

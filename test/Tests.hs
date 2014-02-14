@@ -8,6 +8,8 @@ import Hork.Objects
 import Hork.String
 import Hork.Mem
 
+import Hork.JavaScript.Save
+
 import Data.Char (ord, chr)
 
 
@@ -24,8 +26,43 @@ main = runTestTT allTests
 
 allTests = TestList [
   TestLabel "objects" objectTests,
-  TestLabel "strings" stringTests
+  TestLabel "strings" stringTests,
+  TestLabel "base64" base64Tests
   ]
+
+-- Using the example text from Wikipedia's Baae64 article.
+base64Pairs = [
+  ("any carnal pleasure.", "YW55IGNhcm5hbCBwbGVhc3VyZS4"),
+  ("any carnal pleasure",  "YW55IGNhcm5hbCBwbGVhc3VyZQ"),
+  ("any carnal pleasur",   "YW55IGNhcm5hbCBwbGVhc3Vy"),
+  ("any carnal pleasu",    "YW55IGNhcm5hbCBwbGVhc3U"),
+  ("any carnal pleas",     "YW55IGNhcm5hbCBwbGVhcw")
+  ]
+
+base64Tests = TestList [
+  TestLabel "encoding" $ TestList $ map encodingTest base64Pairs,
+  TestLabel "decoding" $ TestList $ map decodingTest base64Pairs
+  ]
+
+toArr :: String -> IO Mem
+toArr s = newListArray (0, genericLength s - 1) $ map (fromIntegral.ord) s
+
+fromArr :: Mem -> IO String
+fromArr = fmap (map (chr . fromIntegral)) . getElems
+
+-- Turn the first string into an array, encode it, and check against the second.
+encodingTest :: (String, String) -> Test
+encodingTest (actual, expected) = TestCase $ do
+  arr <- toArr actual
+  b64 <- toBase64 arr
+  assertEqual ("encoding of '" ++ actual ++ "'") expected b64
+
+-- Note that the args are reversed here.
+decodingTest :: (String, String) -> Test
+decodingTest (expected, actual) = TestCase $ do
+  arr <- fromBase64 actual
+  str <- fromArr arr
+  assertEqual ("decoding of '" ++ actual ++ "'") expected str
 
 
 
