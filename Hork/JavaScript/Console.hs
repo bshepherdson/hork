@@ -90,10 +90,19 @@ cGetChar = do
   return c
 
 cGetLine :: Hork String
-cGetLine = fmap reverse . cGetLine' . (:[]) =<< cGetChar
-  where cGetLine' ['\x7f'] = cGetLine' . (:[]) =<< cGetChar
-        cGetLine' ('\x7f':x:rest) = cGetLine' . (:rest) =<< cGetChar
-        cGetLine' ('\r':rest) = return rest
+cGetLine = fmap reverse $ cGetLine' []
+  where cGetLine' ['\x7f'] = do
+          liftIO $ cPutStr "\x7f"
+          c <- cGetChar
+          cGetLine' [c]
+        cGetLine' ('\x7f':x:rest) = do
+          liftIO $ cPutStr "\x7f"
+          c <- cGetChar
+          cGetLine' (c:rest)
+        cGetLine' ('\r':rest) = liftIO (cPutStrLn "") >> return rest
         cGetLine' ('\n':rest) = cGetLine' . (:rest) =<< cGetChar
-        cGetLine' rest = cGetLine' . (:rest) =<< cGetChar
+        cGetLine' rest = do
+          c <- cGetChar
+          liftIO $ cPutStr [c]
+          cGetLine' (c:rest)
 
