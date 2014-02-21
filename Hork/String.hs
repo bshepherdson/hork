@@ -1,6 +1,7 @@
 module Hork.String where
 
 import Hork.Core
+import Hork.JavaScript.Console
 
 import Data.Char (ord, chr, toLower)
 
@@ -79,7 +80,7 @@ strZ :: Addr a => a -> Hork [Word8]
 strZ = fmap fst . strLenZ
 
 printZ :: Addr a => a -> Hork ()
-printZ = liftIO . putStr . map (chr . fromIntegral) <=< strZ
+printZ = liftIO . cPutStr . map (chr . fromIntegral) <=< strZ
 
 
 
@@ -99,7 +100,7 @@ strRead textbuf_ parsebuf_ = do
   -- read from the keyboard until a CR
   maxlen <- rb textbuf
   --liftIO $ putStrLn $ "Maxlen: " ++ show maxlen
-  line <- genericTake maxlen <$> liftIO getLine
+  line <- genericTake maxlen <$> cGetLine
   -- write that text to textbuf
   v <- use version
   let line' = map (fromIntegral . ord . toLower) line ++ (if v >= 5 then [] else [0]) -- 0 terminator only on v < 5

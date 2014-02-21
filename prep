@@ -1,0 +1,4 @@
+#!/bin/sh
+
+cp dist/build/hork/hork.jsexe/{lib,rts,lib1,out}.js app
+

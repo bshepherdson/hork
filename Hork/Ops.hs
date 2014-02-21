@@ -7,6 +7,8 @@ import Hork.Core
 import Hork.String
 import Hork.Objects
 
+import Hork.JavaScript.Console
+
 import Data.Char (chr, ord)
 
 import System.Random
@@ -142,7 +144,7 @@ op_0OP_rfalse = zreturn 0
 op_0OP_print :: Op0OP
 op_0OP_print = do
   (s, len) <- use pc >>= strLenZ
-  liftIO . putStr $ map (chr . fromIntegral) s
+  liftIO . cPutStr $ map (chr . fromIntegral) s
   pcBumpBy (2 * fromIntegral len)
 
 op_0OP_print_ret :: Op0OP
@@ -194,7 +196,7 @@ op_0OP_quit = throwError Exit
 
 
 op_0OP_new_line :: Op0OP
-op_0OP_new_line = liftIO $ putStrLn ""
+op_0OP_new_line = liftIO $ cPutStrLn ""
 
 
 op_0OP_show_status :: Op0OP
@@ -580,12 +582,12 @@ op_VAR_read _ = illegalArgument "read without 2 or 4 args"
 
 
 op_VAR_print_char :: OpVAR
-op_VAR_print_char [c] = liftIO $ putChar (chr (fromIntegral c))
+op_VAR_print_char [c] = liftIO $ cPutChar (chr (fromIntegral c))
 op_VAR_print_char _ = illegalArgument "print_char without 1 arg"
 
 
 op_VAR_print_num :: OpVAR
-op_VAR_print_num [n] = liftIO $ putStr $ show (toInt n)
+op_VAR_print_num [n] = liftIO $ cPutStr $ show (toInt n)
 op_VAR_print_num _ = illegalArgument "print_num without 1 arg"
 
 
@@ -636,7 +638,7 @@ op_VAR_get_cursor _ = notImplemented "get_cursor"
 
 
 op_VAR_set_text_style :: OpVAR
-op_VAR_set_text_style _ = liftIO . putStrLn $ "[Unimplemented instruction: set_text_style]"
+op_VAR_set_text_style _ = liftIO . cPutStrLn $ "[Unimplemented instruction: set_text_style]"
 
 
 op_VAR_buffer_mode :: OpVAR
@@ -658,7 +660,7 @@ op_VAR_sound_effect _ = notImplemented "sound_effect"
 -- TODO: Handle the timeouts.
 op_VAR_read_char :: OpVAR
 op_VAR_read_char _ = do
-  c <- fromIntegral . ord <$> liftIO getChar
+  c <- fromIntegral . ord <$> cGetChar
   zstore c
 
 
@@ -718,7 +720,7 @@ op_EXT_set_font _ = notImplemented "set_font"
 
 op_EXT_save_undo :: OpVAR
 op_EXT_save_undo _ = do
-  liftIO . putStrLn $ "[Unimplemented opcode: save_undo]"
+  liftIO . cPutStrLn $ "[Unimplemented opcode: save_undo]"
   zstore 0xffff
 
 

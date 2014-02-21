@@ -17,7 +17,7 @@ module Hork.Core (
   getArg,
 
   argCount, locals, oldPC, oldStack, doStore,
-  mem, stack, pc, routines, storyFile, version,
+  mem, stack, pc, routines, storyFile, version, inputMV, resizeMV,
   doVersion, byVersion, pa,
 
   showHex,
@@ -42,10 +42,12 @@ module Hork.Core (
   module Data.List.Lens
 ) where
 
+import GHCJS.Types
 
 import Hork.Mem
 import Hork.Header
 
+import Control.Concurrent.MVar
 import Control.Monad
 import Control.Monad.State.Strict
 import Control.Monad.Writer.Strict
@@ -82,8 +84,10 @@ data HorkState = HorkState {
   _stack     :: ![Word16],
   _pc        :: !RA,
   _routines  :: ![RoutineState],
-  _storyFile :: !FilePath,
-  _version   :: !Word8
+  _storyFile :: !Mem, -- A virgin copy of the story file.
+  _version   :: !Word8,
+  _inputMV   :: !(MVar JSString),
+  _resizeMV  :: !(MVar (JSObject JSNumber))
 }
 makeLenses ''HorkState
 

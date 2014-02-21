@@ -4,10 +4,12 @@ module Hork where
 import Hork.Core
 import Hork.String
 import Hork.Ops
+import Hork.JavaScript.Console
 
 import System.IO
+import Control.Concurrent.MVar
 
-import qualified Data.ByteString as B
+import GHCJS.Types
 
 
 debugging = False
@@ -90,29 +92,24 @@ zinterpExtended = do
   zinterpVAR (0xbe00 + fromIntegral opcode) args
 
 
-loadFile :: FilePath -> IO (IOUArray RA Word8)
-loadFile file = do
-  -- read the file into a [Word8]
-  b <- B.readFile file
-  newListArray (0, fromIntegral $ B.length b - 1) (B.unpack b)
-
-
-restart :: FilePath -> IO ()
-restart file = do
-  m <- loadFile file
+restart :: MVar JSString -> MVar (JSObject JSNumber) -> Mem -> IO ()
+restart iMV rMV story = do
+  putStrLn "Top of restart"
+  m <- mapArray id story -- Copy the virgin story file to the live memory.
   pc0 <- ra . BA <$> rw_ m hdrPC0
-
   v <- rb_ m hdrVERSION
-  let st = HorkState m [] pc0 [] file v
+  putStrLn $ "Loaded version " ++ show v ++ " file, starting at " ++ showHex pc0
+  let st = HorkState m [] pc0 [] m v iMV rMV
   result <- runHork st $ forever $ do
               (_, w) <- listen zinterp
-              when debugging $ liftIO $ print w
+              when debugging $ liftIO $ putStrLn $ show w
   case result of
-    Left Restart   -> restart file
-    Left (Die msg) -> putStrLn $ "Fatal error: " ++ msg
+    Left Restart   -> restart iMV rMV story
+    Left (Die msg) -> cPutStrLn $ "Fatal error: " ++ msg
     _ -> return ()
 
 
+{-
 test :: Show a => Hork a -> IO ()
 test f = do
   m <- loadFile "Zork1.z3"
@@ -121,4 +118,5 @@ test f = do
 
   result <- runHork st f
   print result
+-}
 
