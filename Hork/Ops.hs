@@ -730,11 +730,24 @@ op_VAR_read_char _ = do
 
 
 op_VAR_scan_table :: OpVAR
-op_VAR_scan_table _ = notImplemented "scan_table"
+op_VAR_scan_table [x, t, l] = op_VAR_scan_table [x, t, l, 0x82] -- Defaults to wordwise, word entries.
+op_VAR_scan_table [target, table, len, form] = do
+  let checkWords = form ^. bitAt 7
+      entrySize = form .|. 127 -- Ignoring top bit.
+      top = table + (len * entrySize)
+      check a = do
+        v <- (if checkWords then rw else fmap fromIntegral . rb) (BA a)
+        if v == target
+          then zstore a >> zbranch True
+          else do
+            let a' = a + entrySize
+            if a' < top then check a' else zstore 0 >> zbranch False
+  check table
+
 
 
 op_VAR_not :: OpVAR
-op_VAR_not _ = notImplemented "not"
+op_VAR_not [v] = zstore (complement v)
 
 
 -- TODO: Handle the third and fourth arguments
@@ -745,11 +758,26 @@ op_VAR_tokenise _ = illegalArgument "tokenise without 1 or 2 arguments"
 
 
 op_VAR_encode_text :: OpVAR
-op_VAR_encode_text _ = notImplemented "encode_text"
+op_VAR_encode_text [src, len, from, dst] = do
+  -- Read len bytes from from in src.
+  word <- mapM (rb.BA) [src+from..src+from+len-1]
+  let text = encode 9 word
+  zipWithM_ ww (map BA [dst,dst+2,dst+4]) text
 
 
 op_VAR_copy_table :: OpVAR
-op_VAR_copy_table _ = notImplemented "copy_table"
+op_VAR_copy_table [src, dst, len] = do
+  -- If dst is 0, then 0 out len bytes of src
+  case (dst, len) of
+    (0, _) -> mapM_ (\a -> wb (BA a) 0) [src .. src+(abs len)-1]
+    _ -> do
+      -- Copy forward or backward as necessary to avoid corruption.
+      -- Forward suffices in all cases, except where src < dst && dst < src+len.
+      -- Forward is also mandated when len < 0.
+      let f = case () of
+                () | len > 0 && src < dst && dst < src+(abs len) -> reverse -- backwards case
+                   | otherwise                                   -> id      -- forwards case
+      zipWithM_ (\s d -> rb (BA s) >>= wb (BA d)) (f [src .. src+(abs len)-1]) (f [dst..])
 
 
 op_VAR_print_table :: OpVAR
@@ -780,12 +808,15 @@ op_EXT_restore _ = do
   zstore res
 
 
+-- Data.Bits.shift* are logical on unsigned types like Word16.
 op_EXT_log_shift :: OpVAR
-op_EXT_log_shift _ = notImplemented "log_shift"
+op_EXT_log_shift [num, by] = zstore (num `shift` fromIntegral (toInt by))
+op_EXT_log_shift _ = illegalArgument "log_shift without 2 arguments"
 
 
+-- Data.Bits.shift* are arithmetical on signed types like the Int16 I'm passing it.
 op_EXT_art_shift :: OpVAR
-op_EXT_art_shift _ = notImplemented "art_shift"
+op_EXT_art_shift [num, by] = zstore (fromIntegral (toInt num `shift` fromIntegral (toInt by)))
 
 
 op_EXT_set_font :: OpVAR
