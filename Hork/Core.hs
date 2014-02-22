@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, BangPatterns, TemplateHaskell #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, BangPatterns, TemplateHaskell, CPP #-}
 module Hork.Core (
   RoutineState(..),
   HorkState(..),
@@ -26,7 +26,9 @@ module Hork.Core (
   module Hork.Header,
   module Control.Monad,
   module Control.Monad.State.Strict,
+#ifdef HORK_DEBUG
   module Control.Monad.Writer.Strict,
+#endif
   module Control.Monad.Error,
   module Control.Applicative,
 
@@ -50,7 +52,11 @@ import Hork.Header
 import Control.Concurrent.MVar
 import Control.Monad
 import Control.Monad.State.Strict
+
+#ifdef HORK_DEBUG
 import Control.Monad.Writer.Strict
+#endif
+
 import Control.Monad.Error
 import Control.Applicative
 
@@ -103,6 +109,12 @@ instance Error Quit where
 die :: String -> Hork a
 die = throwError . Die
 
+debug :: [String] -> Hork ()
+#ifdef HORK_DEBUG
+debug = tell
+#else
+debug _ = return ()
+#endif
 
 pa :: Word16 -> Hork RA
 pa a = do
@@ -128,9 +140,9 @@ byVersion lo hi = do
   if v <= 3 then return lo else return hi
 
 
+#ifdef HORK_DEBUG
 newtype Hork a = Hork (ErrorT Quit (StateT HorkState (WriterT [String] IO)) a)
   deriving (Functor, Applicative, Monad, MonadState HorkState, MonadWriter [String], MonadIO, MonadError Quit)
-
 
 runHork :: HorkState -> Hork a -> IO (Either Quit a)
 runHork st (Hork f) = do
@@ -138,11 +150,16 @@ runHork st (Hork f) = do
       mState = runStateT mError st
       mWriter = runWriterT mState
   fst . fst <$> mWriter
+#else
+newtype Hork a = Hork (ErrorT Quit (StateT HorkState IO) a)
+  deriving (Functor, Applicative, Monad, MonadState HorkState, MonadIO, MonadError Quit)
 
-
--- Helper functions
-debug :: String -> String -> Hork ()
-debug loc msg = tell $ [loc ++ ":\t" ++ msg]
+runHork :: HorkState -> Hork a -> IO (Either Quit a)
+runHork st (Hork f) = do
+  let mError = runErrorT f
+      mState = runStateT mError st
+  fst <$> mState
+#endif
 
 
 -- Specialized memory handlers
@@ -238,16 +255,16 @@ setVar n val | n < 16    = setLocal n val
 getArg :: Word8 -> Hork Word16
 getArg 0 = do
   x <- pcGetWord
-  tell ["(W " ++ showHex x ++ ")"]
+  debug ["(W " ++ showHex x ++ ")"]
   return x
 getArg 1 = do
   x <- fromIntegral <$> pcGet
-  tell ["(B " ++ showHex x ++ ")"]
+  debug ["(B " ++ showHex x ++ ")"]
   return x
 getArg 2 = do
   v <- pcGet
   x <- getVar v
-  tell ["(V " ++ show v ++ " = " ++ showHex x ++ ")"]
+  debug ["(V " ++ show v ++ " = " ++ showHex x ++ ")"]
   return x
 
 

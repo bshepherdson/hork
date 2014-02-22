@@ -34,7 +34,7 @@ zinterp = do
   -- determine the form
   addr <- use pc
   opcode <- pcGet
-  tell ["Op (0x" ++ showHex addr ++ "): " ++ showHex opcode]
+  debug ["Op (0x" ++ showHex addr ++ "): " ++ showHex opcode]
   v <- use version
   case (opcode, opcode `shiftR` 6) of
     (190, _) | v >= 5 -> zinterpExtended
@@ -46,7 +46,7 @@ zinterp = do
 zinterpShort :: Word8 -> Hork ()
 zinterpShort opcode = do
   let argtype = opcode `shiftR` 4 .&. 3
-  tell ["short form", "arg type: " ++ show argtype]
+  debug ["short form", "arg type: " ++ show argtype]
   case argtype of
     3 -> zinterp0OP opcode
     a -> zinterp1OP opcode a
@@ -56,14 +56,14 @@ zinterpLong :: Word8 -> Hork ()
 zinterpLong opcode = do
   let arg1 = 1 + (opcode `shiftR` 6 .&. 1)
       arg2 = 1 + (opcode `shiftR` 5 .&. 1)
-  tell ["long form", show arg1, show arg2]
+  debug ["long form", show arg1, show arg2]
   zinterp2OP opcode arg1 arg2
 
 
 zinterpVariable :: Word8 -> Hork ()
 zinterpVariable opcode = do
   args <- varArgs opcode
-  tell $ "variable form" : map show args
+  debug $ "variable form" : map show args
   case (opcode, opcode ^. bitAt 5) of
     (0xc1, _)  -> zinterpVAR (fromIntegral opcode) args -- VAR format je, special case
     (_, False) -> zinterp2OP opcode (head args) (head $ tail args)
@@ -102,9 +102,11 @@ restart iMV rMV story = do
   let st = HorkState m [] pc0 [] m v iMV rMV (0,0)
   result <- runHork st $ do
     _ <- terminalDimensions -- force a resize before launching the app
+    forever zinterp
+    {-
     forever $ do
       (_, w) <- listen zinterp
-      when debugging $ liftIO $ putStrLn $ show w
+      when debugging $ liftIO $ putStrLn $ show w-}
   case result of
     Left Restart   -> restart iMV rMV story
     Left (Die msg) -> cPutStrLn $ "Fatal error: " ++ msg

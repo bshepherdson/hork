@@ -31,7 +31,7 @@ zinterp1OP opcode typ = do
 
 zinterp2OP :: Word8 -> Word8 -> Word8 -> Hork ()
 zinterp2OP opcode typ1 typ2 = do
-  tell ["real 2OP"]
+  debug ["real 2OP"]
   let num = opcode .&. 31
   arg1 <- getArg typ1
   arg2 <- getArg typ2
@@ -41,7 +41,7 @@ zinterp2OP opcode typ1 typ2 = do
 
 zinterpVAR :: Word16 -> [Word8] -> Hork ()
 zinterpVAR opcode types = do
-  tell ["real var"]
+  debug ["real var"]
   args <- mapM getArg types
   case (opcode, M.lookup opcode opsVAR) of
     (0xc1, _)    -> op_VAR_je args
@@ -56,7 +56,7 @@ zinterpVAR opcode types = do
 
 zreturn :: Word16 -> Hork ()
 zreturn value = do
-  tell ["returning " ++ showHex value]
+  debug ["returning " ++ showHex value]
   rts <- head <$> use routines
   stack .= rts ^. oldStack
   pc .= rts ^. oldPC
@@ -66,14 +66,14 @@ zreturn value = do
 zstore :: Word16 -> Hork ()
 zstore value = do
   b <- pcGet
-  tell ["storing " ++ showHex value ++ " -> " ++ show b]
+  debug ["storing " ++ showHex value ++ " -> " ++ show b]
   setVar b value
 
 
 zbranch :: Bool -> Hork ()
 zbranch val = do
   b1 <- pcGet
-  tell ["branch byte 1 = " ++ showHex b1 ++ ", " ++ show val]
+  debug ["branch byte 1 = " ++ showHex b1 ++ ", " ++ show val]
   let doBranch = val == (b1 ^. bitAt 7)
       isShort  = b1 ^. bitAt 6
   delta <- case isShort of
@@ -85,11 +85,11 @@ zbranch val = do
       -- sign-extend from 14 bits to 16
       return $ if w ^. bitAt 13 then w .|. (3 `shiftL` 14) else fromIntegral w :: Int16
   case doBranch of
-    False -> tell ["skipping branch"]
+    False -> debug ["skipping branch"]
     True  -> case delta of
-        0 -> tell ["branch: return false"] >> zreturn 0
-        1 -> tell ["branch: return true"]  >> zreturn 1
-        _ -> tell ["branch by " ++ show (delta-2)] >> pcBumpBy (delta-2)
+        0 -> debug ["branch: return false"] >> zreturn 0
+        1 -> debug ["branch: return true"]  >> zreturn 1
+        _ -> debug ["branch by " ++ show (delta-2)] >> pcBumpBy (delta-2)
 
 
 toInt :: Word16 -> Int16
@@ -578,12 +578,12 @@ zcall store (routine:args) = do
     True  -> mapM (\i -> rw (addr + 1 + 2 * fromIntegral i)) [0..localCount-1]
   let finalLocals = genericTake localCount $ zipWith combine (map Just args ++ repeat Nothing) (map Just initialValues ++ repeat Nothing)
       routState = RoutineState (genericLength args) finalLocals pc_ stack_ store
-  tell $ ["addr = " ++ showHex addr ++ ", localCount = " ++ show localCount ++ ", locals = " ++ show finalLocals ++ ", hasDefaultLocals = " ++ show hasDefaultLocals]
+  debug $ ["addr = " ++ showHex addr ++ ", localCount = " ++ show localCount ++ ", locals = " ++ show finalLocals ++ ", hasDefaultLocals = " ++ show hasDefaultLocals]
   stack .= []
   routines %= (routState:)
   let newPC = addr + 1 + if hasDefaultLocals then 2 * fromIntegral localCount else 0
   pc .= newPC
-  tell $ ["new PC = " ++ showHex newPC]
+  debug $ ["new PC = " ++ showHex newPC]
  where combine Nothing Nothing  = undefined -- can't happen
        combine Nothing (Just y) = y
        combine (Just x) _       = x

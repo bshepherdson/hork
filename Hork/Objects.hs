@@ -63,7 +63,7 @@ entryOffset offset num = do
   obj <- objEntry num
 
   msg <- showObj num
-  tell [msg]
+  debug [msg]
   return (obj + offset)
 
 
@@ -104,7 +104,7 @@ objPrintShortName num = objShortNameAddr num >>= printZ
 objPropAddr :: Word16 -> Word16 -> Hork RA
 objPropAddr _ 0 = return 0
 objPropAddr num prop = do
-  tell ["objPropAddr: " ++ show num ++ ", " ++ show prop]
+  debug ["objPropAddr: " ++ show num ++ ", " ++ show prop]
   table <- objFirstProp num
   -- iteratively search for the property
   (a, _, _, _) <- propSeek table prop
@@ -124,7 +124,7 @@ objPropAddrData num prop = do
 propSeek :: RA -> Word16 -> Hork (RA, Word16, Word8, Word8)
 propSeek a prop = do
   (propnum, propsize, sizelen) <- propInfo a
-  tell ["propSeek: " ++ show prop ++ ", " ++ show propnum ++ ", " ++ show propsize ++ ", " ++ show sizelen]
+  debug ["propSeek: " ++ show prop ++ ", " ++ show propnum ++ ", " ++ show propsize ++ ", " ++ show sizelen]
   case () of () | propnum < fromIntegral prop  -> return (0, 0, undefined, undefined)
                 | propnum == fromIntegral prop -> return (a, fromIntegral propnum, propsize, sizelen)
                 | otherwise -> propSeek (a + fromIntegral propsize + fromIntegral sizelen) prop
@@ -186,14 +186,14 @@ objPropLenFromAddr a = do
   when (a==0) $ die "Illegal operation: Tried to get_prop_len of a property an object does not have"
   v <- use version
   b <- rb (a-1)
-  tell ["a = " ++ showHex a]
-  tell ["sizebyte = " ++ showHex b]
+  debug ["a = " ++ showHex a]
+  debug ["sizebyte = " ++ showHex b]
   let size = if v <= 3
                then (b `shiftR` 5) + 1
                else if b .&. 128 > 0
                  then b .&. 63
                  else if b ^. bitAt 6 then 2 else 1
-  tell ["size = " ++ show size]
+  debug ["size = " ++ show size]
   return (fromIntegral size)
 
 
@@ -258,7 +258,7 @@ objInsert obj dest = do
   relativeWrite siblingAddr c
   objMsg <- showObj obj
   destMsg <- showObj dest
-  tell ["objInsert complete", "obj: " ++ objMsg, "dest: " ++ destMsg]
+  debug ["objInsert complete", "obj: " ++ objMsg, "dest: " ++ destMsg]
 
 
 -- attrs
