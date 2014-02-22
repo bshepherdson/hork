@@ -69,8 +69,6 @@ zinterpVariable opcode = do
     (_, False) -> zinterp2OP opcode (head args) (head $ tail args)
     (_, True)  -> zinterpVAR (fromIntegral opcode) args
 
--- TODO: call_vs2 and call_vn2
-
 -- Retrieves the args for variable- and extended-form instructions.
 varArgs :: Word8 -> Hork [Word8]
 varArgs opcode = do

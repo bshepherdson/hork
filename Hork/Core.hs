@@ -81,7 +81,7 @@ data RoutineState = RoutineState {
   _oldPC     :: !RA,
   _oldStack  :: ![Word16],
   _doStore   :: !Bool
-}
+} deriving (Show, Read)
 makeLenses ''RoutineState
 
 -- Main state monad

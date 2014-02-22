@@ -8,6 +8,7 @@ import Hork.String
 import Hork.Objects
 
 import Hork.JavaScript.Console
+import Hork.JavaScript.Save
 
 import Data.Char (chr, ord)
 
@@ -156,11 +157,41 @@ op_0OP_nop :: Op0OP
 op_0OP_nop = return ()
 
 
+-- In version <= 3, I branch if I saved successfully.
+-- In version 4, I store the result code.
+-- In version >= 5, I am illegal.
 op_0OP_save :: Op0OP
-op_0OP_save = notImplemented "save"
+op_0OP_save = do
+  v <- use version
+  case v of
+    5 -> die "Illegal use of 0OP @save in version 5"
+    4 -> saveGame "TODO" >>= zstore
+    _ -> do
+      res <- saveGame "TODO"
+      if res == 1 then zbranch True else return () -- branch on successful save.
 
+
+-- In version <= 3, I "branch" on success, but never actually make the jump
+-- In version 4, I return 0 on failure. On success, I have resumed elsewhere.
+-- In version 5, I am illegal.
 op_0OP_restore :: Op0OP
-op_0OP_restore = notImplemented "restore"
+op_0OP_restore = do
+  v <- use version
+  case v of
+    5 -> die "Illegal use of 0OP @restore in version 5"
+    4 -> do
+      res <- restoreGame "TODO"
+      -- PC is now in the middle of the save call, on success.
+      -- So on success, I got a 2 from restoreGame, and should store it (in the save op).
+      -- On failure, I got a 0, and should store it (in the restore op).
+      zstore res
+    _ -> do
+      res <- restoreGame "TODO"
+      -- On success, PC is now in the middle of the save op.
+      -- On failure, I should not branch.
+      -- The Standard says the branch never happens, but that's not true because of negated
+      -- branching, I believe.
+      zbranch (res == 2)
 
 
 op_0OP_restart :: Op0OP
@@ -732,12 +763,21 @@ op_VAR_check_arg_count [n] = do
   zbranch (n <= c)
 
 
+-- TODO: Optional extended arguments for save and restore in v5.
 op_EXT_save :: OpVAR
-op_EXT_save _ = notImplemented "save"
+op_EXT_save _ = do
+  res <- saveGame "TODO"
+  zstore res
 
 
 op_EXT_restore :: OpVAR
-op_EXT_restore _ = notImplemented "restore"
+op_EXT_restore _ = do
+  res <- restoreGame "TODO"
+  -- If successful, PC is now elsewhere, where it was during saveGame.
+  -- That was in the middle of the save op, with its store location.
+  -- So I store here, whether successful or not, and I write the result code into either
+  -- the @save (on success) or @restore (on failure), which is the right thing.
+  zstore res
 
 
 op_EXT_log_shift :: OpVAR

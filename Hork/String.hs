@@ -93,7 +93,6 @@ printZ = liftIO . cPutStr . map (chr . fromIntegral) <=< strZ
 -- populating that info in parsebuf as well.
 strRead :: Word16 -> Word16 -> Hork ()
 strRead textbuf_ parsebuf_ = do
-  -- TODO: Redisplay the status line here.
   let [textbuf, parsebuf] = map (ra.BA) [textbuf_, parsebuf_]
   --liftIO $ putStrLn $ "Buffers: " ++ showHex textbuf ++ ", " ++ showHex parsebuf
 
