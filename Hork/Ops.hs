@@ -199,9 +199,42 @@ op_0OP_new_line :: Op0OP
 op_0OP_new_line = liftIO $ cPutStrLn ""
 
 
+-- Note: Illegal in versions other than 3.
 op_0OP_show_status :: Op0OP
-op_0OP_show_status = notImplemented "show_status"
--- Note: illegal in v4+
+op_0OP_show_status = do
+  v <- use version
+  when (v == 3) show_status
+
+
+show_status :: Hork ()
+show_status = do
+  (r, c) <- terminalDimensions
+  liftIO $ cPutStr ['\x1b','7'] -- save cursor
+  liftIO $ cPutStr "\x1b[1;1H" -- move to top-left
+  liftIO $ cPutStr "\x1b[7m"   -- reverse video
+  liftIO $ cPutStr "\x1b[2K"   -- erase whole line
+  -- Retrieve the current room. Its number is the first global variable, which is #16
+  obj <- getGlobal 16
+  maxObj <- byVersion 255 65535
+
+  objName <- if obj <= maxObj then fmap (map (chr.fromIntegral)) $ objShortName obj else return ""
+  -- TODO: Timed games.
+  let pad n = reverse . take n . (++ repeat ' ') . reverse
+  score <- getGlobal 17
+  turn  <- getGlobal 18
+  let score' = pad 3 $ show score
+      turn'  = pad 4 $ show turn
+      rhs    = "  Score: " ++ score' ++ "  Turn: " ++ turn' ++ " "
+      nameSpace = c - length rhs
+      nameLen = length objName
+      extraSpace = c - nameLen - length rhs
+      nameToPrint = if extraSpace >= 0
+                      then objName
+                      else take (nameLen + extraSpace - 3) objName ++ "..."
+      line = nameToPrint ++ (if extraSpace > 0 then replicate extraSpace ' ' else "") ++ rhs
+  liftIO $ cPutStr line
+  -- And finally, restore the cursor and other modes.
+  liftIO $ cPutStr ['\x1b', '8'] -- restore cursor
 
 
 op_0OP_verify :: Op0OP
@@ -575,8 +608,9 @@ op_VAR_put_prop _ = illegalArgument "put_prop without 3 args"
 op_VAR_read :: OpVAR
 op_VAR_read [text] = op_VAR_read [text, 0]
 op_VAR_read (text:parse:_) = do
-  strRead text parse
   v <- use version
+  when (v <= 3) op_0OP_show_status -- Redisplay the status line, on v3 and earlier.
+  strRead text parse
   when (v >= 5) $ zstore 10 -- store the character code for the newline, 10.
 op_VAR_read _ = illegalArgument "read without 2 or 4 args"
 

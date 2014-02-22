@@ -99,10 +99,12 @@ restart iMV rMV story = do
   pc0 <- ra . BA <$> rw_ m hdrPC0
   v <- rb_ m hdrVERSION
   putStrLn $ "Loaded version " ++ show v ++ " file, starting at " ++ showHex pc0
-  let st = HorkState m [] pc0 [] m v iMV rMV
-  result <- runHork st $ forever $ do
-              (_, w) <- listen zinterp
-              when debugging $ liftIO $ putStrLn $ show w
+  let st = HorkState m [] pc0 [] m v iMV rMV (0,0)
+  result <- runHork st $ do
+    _ <- terminalDimensions -- force a resize before launching the app
+    forever $ do
+      (_, w) <- listen zinterp
+      when debugging $ liftIO $ putStrLn $ show w
   case result of
     Left Restart   -> restart iMV rMV story
     Left (Die msg) -> cPutStrLn $ "Fatal error: " ++ msg

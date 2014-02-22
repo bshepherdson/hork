@@ -17,7 +17,7 @@ module Hork.Core (
   getArg,
 
   argCount, locals, oldPC, oldStack, doStore,
-  mem, stack, pc, routines, storyFile, version, inputMV, resizeMV,
+  mem, stack, pc, routines, storyFile, version, inputMV, resizeMV, dimensions,
   doVersion, byVersion, pa,
 
   showHex,
@@ -87,7 +87,8 @@ data HorkState = HorkState {
   _storyFile :: !Mem, -- A virgin copy of the story file.
   _version   :: !Word8,
   _inputMV   :: !(MVar JSString),
-  _resizeMV  :: !(MVar (JSObject JSNumber))
+  _resizeMV  :: !(MVar (JSObject JSNumber)),
+  _dimensions :: !(Int, Int)
 }
 makeLenses ''HorkState
 
