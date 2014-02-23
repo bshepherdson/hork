@@ -703,7 +703,26 @@ op_VAR_get_cursor _ = notImplemented "get_cursor"
 
 
 op_VAR_set_text_style :: OpVAR
-op_VAR_set_text_style _ = liftIO . cPutStrLn $ "[Unimplemented instruction: set_text_style]"
+op_VAR_set_text_style [style] = do
+  v <- use version
+  if v <= 3
+    then return ()
+    else setTextStyle style
+op_VAR_set_text_style _ = illegalArgument "set_text_style without 1 argument"
+
+setTextStyle :: Word16 -> Hork ()
+setTextStyle nu = do
+  old <- use textStyle
+  -- VT100 only allows setting one and clearing all.
+  -- Therefore if these differ, I clear all styles, then set each of the new ones.
+  when (nu /= old) $ do
+    textStyle .= nu
+    liftIO $ cPutStr "\x1b[0m" -- Clear all styles.
+    when (nu ^. bitAt 0) $ liftIO $ cPutStr "\x1b[7m"
+    when (nu ^. bitAt 1) $ liftIO $ cPutStr "\x1b[1m"
+    when (nu ^. bitAt 2) $ liftIO $ cPutStr "\x1b[4m"
+    -- We ignore style 0x8, which is fixed pitch, since the terminal is always fixed-pitch.
+
 
 
 op_VAR_buffer_mode :: OpVAR

@@ -99,7 +99,7 @@ restart iMV rMV story = do
   pc0 <- ra . BA <$> rw_ m hdrPC0
   v <- rb_ m hdrVERSION
   putStrLn $ "Loaded version " ++ show v ++ " file, starting at " ++ showHex pc0
-  let st = HorkState m [] pc0 [] m v iMV rMV (0,0)
+  let st = HorkState m [] pc0 [] m v iMV rMV (0,0) 0
   result <- runHork st $ do
     _ <- terminalDimensions -- force a resize before launching the app
     setHeaderBits

@@ -17,7 +17,7 @@ module Hork.Core (
   getArg,
 
   argCount, locals, oldPC, oldStack, doStore,
-  mem, stack, pc, routines, storyFile, version, inputMV, resizeMV, dimensions,
+  mem, stack, pc, routines, storyFile, version, inputMV, resizeMV, dimensions, textStyle,
   doVersion, byVersion, pa,
 
   showHex,
@@ -95,7 +95,8 @@ data HorkState = HorkState {
   _version   :: !Word8,
   _inputMV   :: !(MVar JSString),
   _resizeMV  :: !(MVar (JSObject JSNumber)),
-  _dimensions :: !(Int, Int)
+  _dimensions :: !(Int, Int),
+  _textStyle  :: !Word16
 }
 makeLenses ''HorkState
 
