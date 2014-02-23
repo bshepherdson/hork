@@ -90,6 +90,8 @@ zinterpExtended = do
   zinterpVAR (0xbe00 + fromIntegral opcode) args
 
 
+
+
 restart :: MVar JSString -> MVar (JSObject JSNumber) -> Mem -> IO ()
 restart iMV rMV story = do
   putStrLn "Top of restart"
@@ -100,6 +102,7 @@ restart iMV rMV story = do
   let st = HorkState m [] pc0 [] m v iMV rMV (0,0)
   result <- runHork st $ do
     _ <- terminalDimensions -- force a resize before launching the app
+    setHeaderBits
     forever zinterp
     {-
     forever $ do

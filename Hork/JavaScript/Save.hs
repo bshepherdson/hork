@@ -63,6 +63,7 @@ restoreGame saveName = do
   pc <~ fmap read (fetch "pc")
   routines <~ fmap read (fetch "routines")
   version <~ fmap read (fetch "version")
+  setHeaderBits
   return 2 -- returning from save
 
 

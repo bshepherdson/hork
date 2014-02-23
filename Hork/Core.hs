@@ -21,6 +21,7 @@ module Hork.Core (
   doVersion, byVersion, pa,
 
   showHex,
+  setHeaderBits,
 
   module Hork.Mem,
   module Hork.Header,
@@ -271,4 +272,21 @@ getArg 2 = do
 
 showHex :: (Show a, Integral a) => a -> String
 showHex x = Numeric.showHex x ""
+
+-- Sets the various interesting header bits.
+setHeaderBits :: Hork ()
+setHeaderBits = do
+  v <- use version
+  f1 <- rb hdrFLAGS1
+  let f1' = if v <= 3 then f1 .&. 7 else 0
+  wb hdrFLAGS1 f1'
+
+  f2 <- rw hdrFLAGS2
+  ww hdrFLAGS2 (f2 .&. 0xfe47) -- masks to clear the bits I can't support.
+
+  wb hdrINTNUMBER 174
+  wb hdrINTVERSION 20
+
+  wb hdrDEFAULT_FOREGROUND 9 -- white
+  wb hdrDEFAULT_BACKGROUND 2 -- black
 
