@@ -4,6 +4,7 @@ import Hork.Core
 import Hork.JavaScript.Console
 
 import Data.Char (ord, chr, toLower)
+import Data.Array.IArray
 
 
 -- Approach: pull the string of characters out of memory, then munge it.
@@ -26,8 +27,7 @@ mungeStrZ :: [Word16] -> Hork [Word8]
 -- 0 is a space
 mungeStrZ (0 : rest) = (32 :) <$> mungeStrZ rest
 -- literal character: A2 6
-mungeStrZ (5 : 6 : hi : lo : rest) = (fromIntegral ((hi `shiftL` 5) .|. lo) :) <$> mungeStrZ rest
-
+mungeStrZ (5 : 6 : hi : lo : rest) = (zsciiConvert ((hi `shiftL` 5) .|. lo) :) <$> mungeStrZ rest
 -- A couple empty cases for incomplete multi-character constructions
 mungeStrZ (5 : 6 : hi : []) = return []
 mungeStrZ (5 : 6 : []) = return []
@@ -46,6 +46,89 @@ mungeStrZ (5 : []) = return []
 
 mungeStrZ (c : rest) = charMunge (+91) c rest
 mungeStrZ [] = return []
+
+
+-- Handles converting from literal ZSCII values to actual ASCII values.
+-- The core values are the same, but the extended set for accented characters is different.
+zsciiConvert :: Word16 -> Word8
+zsciiConvert i | 155 <= i && i <= 223 = zsciiTable ! i
+               | otherwise            = fromIntegral i -- Normal ASCII matches.
+
+zsciiTable :: Array Word16 Word8
+zsciiTable = listArray (155, 223) [
+  228, -- ä
+  246, -- ö
+  252, -- ü
+  196, -- Ä
+  214, -- Ö
+  220, -- Ü
+  223, -- ß
+  187, -- >>
+  171, -- <<
+  235, -- ë
+  239, -- ï
+  255, -- ÿ
+  203, -- Ë
+  207, -- Ï
+  225, -- á
+  233, -- é
+  237, -- í
+  243, -- ó
+  250, -- ú
+  253, -- y-acute
+  193, -- Á
+  201, -- É
+  205, -- Í
+  211, -- Ó
+  218, -- Ú
+  221, -- Y-acute
+  224, -- à
+  232, -- è
+  236, -- ì
+  242, -- ò
+  249, -- ù
+  192, -- À
+  200, -- È
+  204, -- Ì
+  210, -- Ò
+  217, -- Ù
+  226, -- â
+  234, -- ê
+  238, -- î
+  244, -- ô
+  251, -- û
+  194, -- Â
+  202, -- Ê
+  206, -- Î
+  212, -- Ô
+  219, -- Û
+  229, -- å
+  197, -- Å
+  248, -- ø
+  216, -- Ø
+  227, -- ã
+  241, -- ñ
+  245, -- õ
+  195, -- Ã
+  209, -- Ñ
+  213, -- Õ
+  230, -- ae
+  198, -- AE
+  231, -- ç
+  199, -- Ç
+  254, -- thorn
+  240, -- eth
+  222, -- THORN
+  208, -- ETH
+  163, -- pound
+  156, -- oe
+  140, -- OE
+  161, -- inverted !
+  191 -- inverted ?
+  ]
+
+
+
 
 
 -- table function, character, rest
