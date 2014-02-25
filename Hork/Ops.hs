@@ -531,7 +531,11 @@ op_2OP_call store routine arg = do
 
 
 op_2OP_set_colour :: Op2OP
-op_2OP_set_colour _ _ = notImplemented "set_colour"
+op_2OP_set_colour fg bg = do
+  introducedIn "set_colour" 5
+  fgColor .= fromIntegral fg
+  bgColor .= fromIntegral bg
+  writeTermStyle
 
 
 -- Throw returns from a continuation token previously saved with catch.
@@ -712,17 +716,36 @@ op_VAR_set_text_style _ = illegalArgument "set_text_style without 1 argument"
 
 setTextStyle :: Word16 -> Hork ()
 setTextStyle nu = do
-  old <- use textStyle
-  -- VT100 only allows setting one and clearing all.
-  -- Therefore if these differ, I clear all styles, then set each of the new ones.
+  old <- use zTextStyle
   when (nu /= old) $ do
-    textStyle .= nu
-    liftIO $ cPutStr "\x1b[0m" -- Clear all styles.
-    when (nu ^. bitAt 0) $ liftIO $ cPutStr "\x1b[7m"
-    when (nu ^. bitAt 1) $ liftIO $ cPutStr "\x1b[1m"
-    when (nu ^. bitAt 2) $ liftIO $ cPutStr "\x1b[4m"
-    -- We ignore style 0x8, which is fixed pitch, since the terminal is always fixed-pitch.
+    zTextStyle .= nu
+    let term = case () of
+                 () | nu ^. bitAt 0 -> "7" -- reverse is highest priority
+                    | nu ^. bitAt 1 -> "1" -- then bold
+                    | nu ^. bitAt 2 -> "4" -- then italic/underline
+                    | otherwise -> "0"
+    termTextStyle .= term
+    writeTermStyle
 
+-- Boolean is True for foreground, False for background.
+zColourToTermColour :: Bool -> Word8 -> Hork Word8
+zColourToTermColour True  0 = use fgColor
+zColourToTermColour False 0 = use bgColor
+zColourToTermColour True  1 = return defaultForegroundColour
+zColourToTermColour False 1 = return defaultBackgroundColour
+zColourToTermColour True  n = return $ 28 + n
+zColourToTermColour False n = return $ 38 + n
+-- 28+n relates the Z-machine colours, eg. 2 for black,
+-- to the ANSI colours, eg. 30 for black, foreground (40 for background).
+
+-- Outputs the terminal escape sequence to set the colours and text style.
+writeTermStyle :: Hork ()
+writeTermStyle = do
+  style <- use termTextStyle
+  fg <- zColourToTermColour True  =<< use fgColor
+  bg <- zColourToTermColour False =<< use bgColor
+  -- Esc[Style;FG;BGm
+  liftIO $ cPutStr $ "\x1b[" ++ style ++ ";" ++ show fg ++ ";" ++ show bg ++ "m"
 
 
 op_VAR_buffer_mode :: OpVAR

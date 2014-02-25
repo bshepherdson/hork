@@ -17,11 +17,12 @@ module Hork.Core (
   getArg,
 
   argCount, locals, oldPC, oldStack, doStore,
-  mem, stack, pc, routines, storyFile, version, inputMV, resizeMV, dimensions, textStyle,
+  mem, stack, pc, routines, storyFile, version, inputMV, resizeMV, dimensions,
+  zTextStyle, termTextStyle, fgColor, bgColor,
   doVersion, byVersion, pa,
 
   showHex,
-  setHeaderBits,
+  setHeaderBits, defaultForegroundColour, defaultBackgroundColour,
 
   module Hork.Mem,
   module Hork.Header,
@@ -96,7 +97,10 @@ data HorkState = HorkState {
   _inputMV   :: !(MVar JSString),
   _resizeMV  :: !(MVar (JSObject JSNumber)),
   _dimensions :: !(Int, Int),
-  _textStyle  :: !Word16
+  _zTextStyle     :: !Word16,
+  _termTextStyle  :: !String,
+  _fgColor        :: !Word8,
+  _bgColor        :: !Word8
 }
 makeLenses ''HorkState
 
@@ -274,12 +278,18 @@ getArg 2 = do
 showHex :: (Show a, Integral a) => a -> String
 showHex x = Numeric.showHex x ""
 
+
+defaultForegroundColour, defaultBackgroundColour :: Word8
+defaultForegroundColour = 9 -- white
+defaultBackgroundColour = 2 -- black
+
+
 -- Sets the various interesting header bits.
 setHeaderBits :: Hork ()
 setHeaderBits = do
   v <- use version
   f1 <- rb hdrFLAGS1
-  let f1' = if v <= 3 then f1 .&. 7 else 0
+  let f1' = if v <= 3 then f1 .&. 7 else 0x1d -- bits 0, 2, 3, 4 = 0x1d
   wb hdrFLAGS1 f1'
 
   f2 <- rw hdrFLAGS2
@@ -288,6 +298,6 @@ setHeaderBits = do
   wb hdrINTNUMBER 174
   wb hdrINTVERSION 20
 
-  wb hdrDEFAULT_FOREGROUND 9 -- white
-  wb hdrDEFAULT_BACKGROUND 2 -- black
+  wb hdrDEFAULT_FOREGROUND defaultForegroundColour
+  wb hdrDEFAULT_BACKGROUND defaultBackgroundColour
 
