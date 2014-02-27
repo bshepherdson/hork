@@ -99,8 +99,9 @@ restart iMV rMV story = do
   pc0 <- ra . BA <$> rw_ m hdrPC0
   v <- rb_ m hdrVERSION
   putStrLn $ "Loaded version " ++ show v ++ " file, starting at " ++ showHex pc0
+  undoRef <- newIORef Nothing
   let st = HorkState m [] pc0 [] m v iMV rMV
-             (0,0) 0 "0" defaultForegroundColour defaultBackgroundColour
+             (0,0) 0 "0" defaultForegroundColour defaultBackgroundColour undoRef
   result <- runHork st $ do
     _ <- terminalDimensions -- force a resize before launching the app
     setHeaderBits

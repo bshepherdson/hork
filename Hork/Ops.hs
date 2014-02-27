@@ -692,8 +692,9 @@ op_VAR_set_window :: OpVAR
 op_VAR_set_window _ = notImplemented "set_window"
 
 
+-- TODO: Only partially implemented. Just sends the clear screen control code.
 op_VAR_erase_window :: OpVAR
-op_VAR_erase_window _ = notImplemented "erase_window"
+op_VAR_erase_window _ = liftIO $ cPutStr "\x1b[2J"
 
 op_VAR_erase_line :: OpVAR
 op_VAR_erase_line _ = notImplemented "erase_line"
@@ -867,12 +868,29 @@ op_EXT_set_font _ = notImplemented "set_font"
 
 op_EXT_save_undo :: OpVAR
 op_EXT_save_undo _ = do
-  liftIO . cPutStrLn $ "[Unimplemented opcode: save_undo]"
-  zstore 0xffff
+  -- Duplicate the entire HorkState. This includes copying the memory.
+  st <- get
+  oldMem <- use mem
+  cp <- liftIO $ mapArray id oldMem
+  let st' = st { _mem = cp }
+  ref <- use undoState
+  liftIO $ writeIORef ref (Just st')
+  zstore 1 -- Successfully saved, so return 1.
 
 
 op_EXT_restore_undo :: OpVAR
-op_EXT_restore_undo _ = notImplemented "restore_undo"
+op_EXT_restore_undo _ = do
+  -- Read the state from the IORef
+  ref <- use undoState
+  oldState <- liftIO $ readIORef ref
+  case oldState of
+    Nothing -> zstore 0xffff -- No previous saved state. Return -1 for a failed load.
+    Just (st) -> do
+      put st -- PC is now pointing at the middle of the save_undo op.
+      setHeaderBits
+      ref' <- use undoState
+      liftIO $ writeIORef ref' Nothing -- Clear the old state.
+      zstore 2 -- Successful return from a restore.
 
 
 op_EXT_print_unicode :: OpVAR

@@ -18,7 +18,7 @@ module Hork.Core (
 
   argCount, locals, oldPC, oldStack, doStore,
   mem, stack, pc, routines, storyFile, version, inputMV, resizeMV, dimensions,
-  zTextStyle, termTextStyle, fgColor, bgColor,
+  zTextStyle, termTextStyle, fgColor, bgColor, undoState,
   doVersion, byVersion, pa,
 
   showHex,
@@ -40,6 +40,7 @@ module Hork.Core (
   module Data.List,
   module Data.Array.IO,
   module Data.Array.MArray,
+  module Data.IORef,
 
   module Control.Lens,
   module Data.Bits.Lens,
@@ -68,6 +69,7 @@ import Data.Int
 import Data.List
 import Data.Array.IO hiding (index)
 import Data.Array.MArray hiding (index)
+import Data.IORef
 
 import qualified Numeric (showHex)
 
@@ -100,7 +102,8 @@ data HorkState = HorkState {
   _zTextStyle     :: !Word16,
   _termTextStyle  :: !String,
   _fgColor        :: !Word8,
-  _bgColor        :: !Word8
+  _bgColor        :: !Word8,
+  _undoState      :: IORef (Maybe HorkState)
 }
 makeLenses ''HorkState
 
@@ -293,7 +296,7 @@ setHeaderBits = do
   wb hdrFLAGS1 f1'
 
   f2 <- rw hdrFLAGS2
-  ww hdrFLAGS2 (f2 .&. 0xfe47) -- masks to clear the bits I can't support.
+  ww hdrFLAGS2 (f2 .&. 0xfe57) -- masks to clear the bits I can't support.
 
   wb hdrINTNUMBER 174
   wb hdrINTVERSION 20

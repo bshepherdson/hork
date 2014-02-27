@@ -5713,7 +5713,7 @@ hterm.Keyboard = function(terminal) {
   /**
    * Same as above, except for page up/page down.
    */
-  this.pageKeysScroll = false;
+  this.pageKeysScroll = true;
 
   /**
    * If true, don't send Ctrl-V to the host, but instead paste the contents of
