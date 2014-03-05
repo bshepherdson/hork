@@ -191,7 +191,7 @@ objPropLenFromAddr a = do
   let size = if v <= 3
                then (b `shiftR` 5) + 1
                else if b .&. 128 > 0
-                 then b .&. 63
+                 then let raw = b .&. 63 in if raw == 0 then 64 else raw
                  else if b ^. bitAt 6 then 2 else 1
   debug ["size = " ++ show size]
   return (fromIntegral size)
