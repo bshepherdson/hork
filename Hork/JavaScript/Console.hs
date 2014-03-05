@@ -7,7 +7,9 @@ module Hork.JavaScript.Console (
   cPutStrLn,
   cGetChar,
   cGetLine,
-  terminalDimensions
+  terminalDimensions,
+  getCursorPos,
+  moveCursor
 ) where
 
 import GHCJS.Types
@@ -102,6 +104,14 @@ cGetChar = do
     [c] -> return c
     _   -> cGetChar -- Probably an escape or control character.
 
+cReadUntil :: Char -> Hork String
+cReadUntil target = cReadUntil' []
+  where cReadUntil' xs = do
+          c <- cGetChar
+          if c == target
+            then return (c:xs)
+            else cReadUntil' (c:xs)
+
 cGetLine :: Hork String
 cGetLine = fmap reverse $ cGetLine' []
   where cGetLine' ['\x7f'] = do
@@ -123,7 +133,6 @@ terminalDimensions :: Hork (Int, Int)
 terminalDimensions = do
   drainResizeEvents
   use dimensions
-
 
 drainResizeEvents :: Hork ()
 drainResizeEvents = do
@@ -151,4 +160,20 @@ drainResizeEvents = do
           wb hdrFONT_HEIGHT_UNITS 1
         _ -> return ()
       drainResizeEvents
+
+
+-- Gets the real cursor position from the terminal.
+getCursorPos :: Hork (Word16, Word16)
+getCursorPos = do
+  -- Send the cursor positioning request.
+  liftIO $ cPutStr "\x1b[6n"
+  -- And then read the response. Its length is variable and it doesn't end with a newline.
+  l <- cReadUntil 'R'
+  let l' = drop 2 l
+      (line, ';':rest) = break (==';') l'
+      (col, _) = break (=='R') rest
+  return (read line, read col)
+
+moveCursor :: (Word16, Word16) -> Hork ()
+moveCursor (r,c) = liftIO $ cPutStr $ "\x1b[" ++ show r ++ ";" ++ show c ++ "H"
 

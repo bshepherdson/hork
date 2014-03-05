@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, NoMonomorphismRestriction, BangPatterns, TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, NoMonomorphismRestriction, BangPatterns, TemplateHaskell, OverloadedStrings, CPP #-}
 module Hork where
 
 import Hork.Core
@@ -102,14 +102,18 @@ restart iMV rMV story = do
   undoRef <- newIORef Nothing
   let st = HorkState m [] pc0 [] m v iMV rMV
              (0,0) 0 "0" defaultForegroundColour defaultBackgroundColour undoRef
+             Nothing 1 ((1,1), (1,1))
   result <- runHork st $ do
     _ <- terminalDimensions -- force a resize before launching the app
     setHeaderBits
-    forever zinterp
-    {-
+#ifdef HORK_DEBUG
     forever $ do
       (_, w) <- listen zinterp
-      when debugging $ liftIO $ putStrLn $ show w-}
+      liftIO $ putStrLn $ show w
+#else
+    forever zinterp
+#endif
+
   case result of
     Left Restart   -> restart iMV rMV story
     Left (Die msg) -> cPutStrLn $ "Fatal error: " ++ msg

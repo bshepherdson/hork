@@ -19,6 +19,7 @@ module Hork.Core (
   argCount, locals, oldPC, oldStack, doStore,
   mem, stack, pc, routines, storyFile, version, inputMV, resizeMV, dimensions,
   zTextStyle, termTextStyle, fgColor, bgColor, undoState,
+  splitWindow, currentWindow, cursorPos,
   doVersion, byVersion, pa,
 
   showHex,
@@ -103,7 +104,10 @@ data HorkState = HorkState {
   _termTextStyle  :: !String,
   _fgColor        :: !Word8,
   _bgColor        :: !Word8,
-  _undoState      :: IORef (Maybe HorkState)
+  _undoState      :: IORef (Maybe HorkState),
+  _splitWindow    :: Maybe Word16, -- Just the height of it.
+  _currentWindow  :: Word16, -- Window 0 = upper?
+  _cursorPos      :: ((Word16, Word16), (Word16, Word16)) -- Upper and lower windows.
 }
 makeLenses ''HorkState
 

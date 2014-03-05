@@ -512,15 +512,14 @@ div' a b = div'' a b
         div'' a b | aPos == bPos = div a b
                   | otherwise = truncate (fromIntegral a / fromIntegral b)
 
+
 mod' :: Int16 -> Int16 -> Int16
 mod' _ 0 = error "Division by 0"
 mod' a b = mod'' a b
   where aPos = a >= 0
         bPos = b > 0
         mod'' a b | aPos == bPos = mod a b
-                  | otherwise = let dbl = fromIntegral a / fromIntegral b
-                                    int = truncate dbl
-                                in  truncate $ fromIntegral b * (dbl - fromIntegral int)
+                  | otherwise    = -(b - mod a b)
 
 
 op_2OP_call :: Bool -> Op2OP
@@ -687,24 +686,119 @@ op_VAR_pull _ = illegalArgument "pull without 1 arg"
 
 
 op_VAR_split_window :: OpVAR
-op_VAR_split_window _ = notImplemented "split_window"
+op_VAR_split_window [n] = do
+  -- v3 has split window support, but it's only used in Seastalker
+  -- and has somewhat different rules, so it's omitted here.
+  introducedIn "split_window" 4
+  liftIO $ putStrLn $ "split_window " ++ show n
+  liftIO $ cPutStr $ "\x1b[" ++ show (n+1) ++ ";999r"
+  (y, x) <- getCursorPos
+  current <- use currentWindow
+  case n of
+    0 -> do
+      -- Unsplit! No erasing or cursor movement.
+      splitWindow .= Nothing
+      currentWindow .= 1
+
+    _ -> do
+      -- Current split.
+      -- Get the stored cursor positions of both windows, and fix them.
+      splitWindow .= Just n
+
+      -- Check and adjust upper window.
+      (yU, xU) <- use $ cursorPos . _1 -- Position in upper window.
+      when (yU > n) $ do -- Cursor is outside the new upper window, so revert to upper left.
+        cursorPos . _1 .= (1,1)
+
+      -- And check the lower window.
+      (yL, xL) <- use $ cursorPos . _2 -- Position in lower window.
+      when (yL <= n) $ do
+        cursorPos . _2 .= (n+1, 1)
+
+      -- Now move the real cursor to its stored location for the current window.
+      -- This value may have changed, but there's no harm in moving the cursor to its
+      -- current location.
+      pos <- if current == 0
+               then use $ cursorPos . _1
+               else use $ cursorPos . _2
+      moveCursor pos
+
+
 op_VAR_set_window :: OpVAR
-op_VAR_set_window _ = notImplemented "set_window"
+op_VAR_set_window [n] = do
+  introducedIn "set_window" 4 -- Really v3, but only one game uses it.
+  liftIO $ putStrLn $ "set_window " ++ show n
+  current <- use currentWindow
+  when (n /= current) $ do
+    (y, x) <- getCursorPos -- Retrieve the real cursor position.
+    case n of
+      0 -> do
+        -- The position in the upper window is always set to (1,1).
+        cursorPos . _2 .= (y, x) -- Store the current position for window 1.
+        moveCursor (1, 1)
+      1 -> do
+        newPos <- use $ cursorPos . _2 -- Retrieve the new cursor position.
+        cursorPos . _1 .= (y, x) -- Store the current position for window 0.
+        moveCursor newPos
+      _ -> return () -- Ignore bad set_window calls.
+op_VAR_set_window _ = illegalArgument "set_window with bad arguments"
 
 
--- TODO: Only partially implemented. Just sends the clear screen control code.
 op_VAR_erase_window :: OpVAR
-op_VAR_erase_window _ = liftIO $ cPutStr "\x1b[2J"
+op_VAR_erase_window xs = do
+  liftIO $ putStrLn $ "erase_window " ++ show xs
+  op_VAR_erase_window_ xs
+op_VAR_erase_window_ [-2] = liftIO $ cPutStr "\x1b[2J" -- Clear without unsplitting.
+op_VAR_erase_window_ [-1] = do
+  liftIO $ cPutStr "\x1b[2J" -- Clear without unsplitting.
+  op_VAR_split_window [0] -- Unsplit the windows.
+
+op_VAR_erase_window_ [0] = do
+  -- Clear the upper window.
+  msplit <- use splitWindow
+  case msplit of
+    Nothing -> return () -- No upper window, so do nothing.
+    Just n -> do
+      moveCursor (n, 500) -- Move to right edge at end of upper window.
+      liftIO $ cPutStr "\x1b[1J" -- Erase from beginning to cursor, inclusive.
+      moveCursor (1,1)
+
+op_VAR_erase_window_ [1] = do
+  split <- maybe 1 id <$> use splitWindow
+  moveCursor (split+1, 1) -- Move to beginning of lower window.
+  liftIO $ cPutStr "\x1b[J"
+
+op_VAR_erase_window_ _ = return () -- Ignore illegal erase_widnows.
+
 
 op_VAR_erase_line :: OpVAR
-op_VAR_erase_line _ = notImplemented "erase_line"
+op_VAR_erase_line [1] = liftIO $ cPutStr "\x1b[L" -- Erase from cursor to EOL.
+op_VAR_erase_line _ = return () -- Do nothing.
+
 
 op_VAR_set_cursor :: OpVAR
-op_VAR_set_cursor _ = notImplemented "set_cursor"
+op_VAR_set_cursor [r,c] = do
+  -- This is only meaningful if the upper window is selected.
+  liftIO $ putStrLn $ "set_cursor " ++ show r ++ ", " ++ show c
+  current <- use currentWindow
+  msplit <- use splitWindow
+  case (current, msplit) of
+    (0, Just n) | r <= n -> do
+                  moveCursor (r,c)
+                  cursorPos . _1 .= (r,c)
+                | otherwise -> do
+                  moveCursor (r,c)
+                  currentWindow .= 1 -- We've moved to the lower window.
+                  cursorPos . _2 .= (r,c)
+    _ -> return ()
+op_VAR_set_cursor _ = return ()
 
 
 op_VAR_get_cursor :: OpVAR
-op_VAR_get_cursor _ = notImplemented "get_cursor"
+op_VAR_get_cursor [arr] = do
+  (y, x) <- getCursorPos
+  ww (BA arr) y
+  ww (BA (arr+2)) x
 
 
 op_VAR_set_text_style :: OpVAR
@@ -863,7 +957,11 @@ op_EXT_art_shift [num, by] = zstore (fromIntegral (toInt num `shift` fromIntegra
 
 
 op_EXT_set_font :: OpVAR
-op_EXT_set_font _ = notImplemented "set_font"
+op_EXT_set_font [font] = do
+  case font of
+    1 -> zstore 1 -- "successfully" switching to the normal font.
+    4 -> zstore 4 -- "successfully" switching to fixed-width font.
+    _ -> zstore 0 -- unsuccessfully switching to any other font.
 
 
 op_EXT_save_undo :: OpVAR
