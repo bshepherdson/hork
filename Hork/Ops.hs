@@ -679,6 +679,12 @@ op_VAR_push [val] = push val
 op_VAR_push _ = illegalArgument "push without 1 arg"
 
 op_VAR_pull :: OpVAR
+op_VAR_pull [0] = do
+  val <- pop
+  _ <- pop -- Special case. a stack of ... 43 44 45 becomes ... 43 45, because the value is
+           -- retrieved, and then written back directly in place, rather than pushed.
+           -- Put another way, this is Forth's NIP = SWAP DROP
+  setVar 0 val
 op_VAR_pull [var] = do
   val <- pop
   setVar (fromIntegral var) val
